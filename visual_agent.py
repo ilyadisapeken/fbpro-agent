@@ -1,128 +1,111 @@
 import os
 import json
 import glob
+import re
 import urllib.parse
 import urllib.request
 import subprocess
-import re
 from datetime import datetime
 
-# ==========================================
-# KONFIGURASI
-# ==========================================
+
+# ============================================================
+# FBPRO VISUAL AGENT
+# ============================================================
 
 WIDTH = 1080
 HEIGHT = 1920
 FPS = 30
 
-FONT_BOLD = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
-FONT_REGULAR = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
-
-GEMINI_API_KEY = os.environ.get(
-    "GEMINI_API_KEY"
-)
-
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 GEMINI_MODEL = "gemini-3.1-flash-lite"
 
-WIKIMEDIA_API = (
-    "https://commons.wikimedia.org/w/api.php"
-)
+WIKIMEDIA_API = "https://commons.wikimedia.org/w/api.php"
 
 USER_AGENT = (
-    "FBProVisualAgent/4.0 "
+    "FBProVisualAgent/5.0 "
     "(GitHub Actions)"
 )
 
-# ==========================================
-# CARI PRODUCTION TERBARU
-# ==========================================
-
-files = glob.glob(
-    "production/*.json"
+FONT_BOLD = (
+    "/usr/share/fonts/truetype/dejavu/"
+    "DejaVuSans-Bold.ttf"
 )
 
-if not files:
+
+# ============================================================
+# FOLDER
+# ============================================================
+
+os.makedirs("visuals", exist_ok=True)
+os.makedirs("visual_tmp", exist_ok=True)
+
+
+# ============================================================
+# CARI FILE PRODUCTION TERBARU
+# ============================================================
+
+production_files = glob.glob("production/*.json")
+
+if not production_files:
     raise SystemExit(
-        "Tidak ada file production/*.json"
+        "ERROR: Tidak ditemukan file production/*.json"
     )
 
-latest_file = max(
-    files,
+latest_production = max(
+    production_files,
     key=os.path.getmtime
 )
 
 print()
-print("Production source:")
-print(latest_file)
+print("========================================")
+print("FBPRO VISUAL AGENT")
+print("========================================")
+print()
+print("Production:")
+print(latest_production)
+print()
+
+
+# ============================================================
+# BACA PRODUCTION
+# ============================================================
 
 with open(
-    latest_file,
+    latest_production,
     "r",
     encoding="utf-8"
-) as f:
+) as file:
+    production = json.load(file)
 
-    data = json.load(f)
 
-# ==========================================
-# DATA
-# ==========================================
+video_info = production.get("video", {})
 
-video_info = data.get(
-    "video",
-    {}
+title = str(
+    video_info.get(
+        "judul",
+        "FBPro Reels"
+    )
 )
 
-title = video_info.get(
-    "judul",
-    "FBPro Reels"
-)
-
-theme = video_info.get(
-    "tema",
-    "Inspirasi"
-)
-
-storyboard = data.get(
+storyboard = production.get(
     "storyboard",
-    []
-)
-
-visual_prompts = data.get(
-    "visual_prompts",
     []
 )
 
 if not storyboard:
     raise SystemExit(
-        "Storyboard tidak ditemukan."
+        "ERROR: storyboard tidak ditemukan."
     )
 
-# ==========================================
-# FOLDER
-# ==========================================
 
-os.makedirs(
-    "visuals",
-    exist_ok=True
-)
+print("Judul:", title)
+print("Jumlah scene:", len(storyboard))
+print()
 
-os.makedirs(
-    "visual_tmp",
-    exist_ok=True
-)
 
-timestamp = datetime.now().strftime(
-    "%Y-%m-%d_%H-%M-%S"
-)
-
-output_video = (
-    f"visuals/"
-    f"FBPro_Visual_{timestamp}.mp4"
-)
-
-# ==========================================
-# HTTP JSON
-# ==========================================
+# ============================================================
+# HTTP GET JSON
+# ============================================================
 
 def get_json(url):
 
@@ -135,26 +118,29 @@ def get_json(url):
 
     with urllib.request.urlopen(
         request,
-        timeout=40
+        timeout=60
     ) as response:
 
-        return json.loads(
-            response.read().decode(
-                "utf-8"
-            )
-        )
+        data = response.read()
+
+    return json.loads(
+        data.decode("utf-8")
+    )
 
 
-# ==========================================
-# DOWNLOAD
-# ==========================================
+# ============================================================
+# DOWNLOAD FILE
+# ============================================================
 
 def download_file(
     url,
-    destination
+    filename
 ):
 
     try:
+
+        print("Download:")
+        print(url)
 
         request = urllib.request.Request(
             url,
@@ -165,109 +151,131 @@ def download_file(
 
         with urllib.request.urlopen(
             request,
-            timeout=60
+            timeout=90
         ) as response:
 
             content = response.read()
 
-        if len(content) < 10000:
+        if len(content) < 5000:
+            print(
+                "File terlalu kecil."
+            )
             return False
 
         with open(
-            destination,
+            filename,
             "wb"
-        ) as f:
+        ) as file:
 
-            f.write(content)
+            file.write(content)
+
+        print(
+            "Download berhasil:",
+            filename
+        )
 
         return True
 
     except Exception as error:
 
         print(
-            "Download error:",
+            "Download gagal:",
             error
         )
 
         return False
 
 
-# ==========================================
-# GEMINI:
-# BUAT SEARCH KEYWORDS
-# ==========================================
+# ============================================================
+# BERSIHKAN TEXT
+# ============================================================
 
-def make_search_keywords(
-    scene,
-    index
-):
+def clean_text(text):
 
-    visual = scene.get(
-        "visual",
-        ""
+    if text is None:
+        return ""
+
+    text = str(text)
+
+    text = text.replace(
+        "\n",
+        " "
     )
 
-    voice = scene.get(
-        "voice_over",
-        ""
+    text = text.replace(
+        "\r",
+        " "
     )
 
-    screen = scene.get(
-        "teks_layar",
-        ""
+    text = " ".join(
+        text.split()
     )
 
-    prompt = ""
+    return text.strip()
 
-    if index < len(
-        visual_prompts
-    ):
 
-        item = visual_prompts[
-            index
-        ]
+# ============================================================
+# GEMINI - BUAT KEYWORD
+# ============================================================
 
-        if isinstance(
-            item,
-            dict
-        ):
+def create_keywords(scene):
 
-            prompt = item.get(
-                "prompt",
-                ""
-            )
+    visual = clean_text(
+        scene.get(
+            "visual",
+            ""
+        )
+    )
 
-    instruction = f"""
-You create search keywords for a stock/photo
-search engine.
+    voice = clean_text(
+        scene.get(
+            "voice_over",
+            ""
+        )
+    )
 
-Create 5 different SHORT English search queries
-for a real photograph matching this video scene.
+    screen = clean_text(
+        scene.get(
+            "teks_layar",
+            ""
+        )
+    )
 
-Do NOT create an image.
-Do NOT explain anything.
+    prompt = f"""
+Create search keywords for Wikimedia Commons.
 
-Each query must contain only 2-6 simple words.
+We need REAL PHOTOGRAPHS for a vertical social media
+video about Indonesian people, business, daily life,
+work, family, food, shopping, money, or other practical
+subjects.
 
-Avoid abstract words.
+Based on this scene:
 
-Prefer concrete things such as:
-person, seller, shop, phone, money,
-food, laptop, home, street, family,
-morning, office, market, customer,
-working, walking, cooking, studying.
-
-Scene visual:
+Visual:
 {visual}
 
 Voice:
 {voice}
 
-On screen:
+Text:
 {screen}
 
-AI visual prompt:
-{prompt}
+Return exactly 5 short English search queries.
+
+Rules:
+- Each query must contain 2 to 5 words.
+- Use concrete objects, people, places or activities.
+- Do not use abstract motivational words.
+- Do not write explanations.
+- Do not create image prompts.
+- Do not use quotation marks.
+
+Examples:
+small business owner
+woman using smartphone
+local food seller
+customer shopping market
+person working laptop
 
 Return ONLY JSON:
 
@@ -283,12 +291,16 @@ Return ONLY JSON:
 """
 
     if not GEMINI_API_KEY:
+        print(
+            "WARNING: GEMINI_API_KEY tidak tersedia."
+        )
         return []
 
     url = (
         "https://generativelanguage.googleapis.com/"
         "v1beta/models/"
-        f"{GEMINI_MODEL}:generateContent"
+        + GEMINI_MODEL
+        + ":generateContent"
     )
 
     body = {
@@ -296,13 +308,13 @@ Return ONLY JSON:
             {
                 "parts": [
                     {
-                        "text": instruction
+                        "text": prompt
                     }
                 ]
             }
         ],
         "generationConfig": {
-            "temperature": 0.3,
+            "temperature": 0.2,
             "responseMimeType": "application/json"
         }
     }
@@ -313,9 +325,7 @@ Return ONLY JSON:
             url,
             data=json.dumps(
                 body
-            ).encode(
-                "utf-8"
-            ),
+            ).encode("utf-8"),
             headers={
                 "Content-Type":
                     "application/json",
@@ -345,9 +355,7 @@ Return ONLY JSON:
             ["text"]
         )
 
-        parsed = json.loads(
-            text
-        )
+        parsed = json.loads(text)
 
         queries = parsed.get(
             "queries",
@@ -358,16 +366,13 @@ Return ONLY JSON:
             queries,
             list
         ):
-
             return []
 
         cleaned = []
 
-        for query in queries:
+        for item in queries:
 
-            query = str(
-                query
-            )
+            query = clean_text(item)
 
             query = re.sub(
                 r"[^a-zA-Z0-9\s-]",
@@ -380,6 +385,7 @@ Return ONLY JSON:
             )
 
             if query:
+
                 cleaned.append(
                     query[:80]
                 )
@@ -389,20 +395,65 @@ Return ONLY JSON:
     except Exception as error:
 
         print(
-            "Gemini keyword error:",
-            error
+            "Gemini keyword error:"
         )
+
+        print(error)
 
         return []
 
 
-# ==========================================
-# WIKIMEDIA SEARCH
-# ==========================================
+# ============================================================
+# FALLBACK KEYWORD
+# ============================================================
 
-def search_wikimedia(
-    query
-):
+def fallback_keywords(scene):
+
+    visual = clean_text(
+        scene.get(
+            "visual",
+            ""
+        )
+    )
+
+    voice = clean_text(
+        scene.get(
+            "voice_over",
+            ""
+        )
+    )
+
+    words = re.findall(
+        r"[a-zA-Z]{4,}",
+        visual + " " + voice
+    )
+
+    words = words[:4]
+
+    if words:
+
+        return [
+            " ".join(words),
+            "person working",
+            "small business",
+            "business owner",
+            "daily activity"
+        ]
+
+    return [
+        "person working",
+        "small business",
+        "business owner",
+        "daily activity",
+        "people working"
+    ]
+
+
+# ============================================================
+# WIKIMEDIA SEARCH
+# ============================================================
+
+def search_wikimedia(query):
 
     params = {
         "action": "query",
@@ -410,25 +461,21 @@ def search_wikimedia(
         "generator": "search",
         "gsrsearch": query,
         "gsrnamespace": "6",
-        "gsrlimit": "10",
+        "gsrlimit": "8",
         "prop": "imageinfo",
         "iiprop": "url|mime",
-        "iiurlwidth": "1200"
+        "iiurlwidth": "1400"
     }
 
     url = (
         WIKIMEDIA_API
         + "?"
-        + urllib.parse.urlencode(
-            params
-        )
+        + urllib.parse.urlencode(params)
     )
 
     try:
 
-        result = get_json(
-            url
-        )
+        result = get_json(url)
 
     except Exception as error:
 
@@ -445,19 +492,17 @@ def search_wikimedia(
         .get("pages", {})
     )
 
-    candidates = []
-
     for page in pages.values():
 
-        info_list = page.get(
+        imageinfo = page.get(
             "imageinfo",
             []
         )
 
-        if not info_list:
+        if not imageinfo:
             continue
 
-        info = info_list[0]
+        info = imageinfo[0]
 
         mime = info.get(
             "mime",
@@ -467,60 +512,60 @@ def search_wikimedia(
         if not mime.startswith(
             "image/"
         ):
-
             continue
 
         image_url = info.get(
-            "thumburl"
+            "thumburl",
+            ""
         )
 
         if not image_url:
 
             image_url = info.get(
-                "url"
+                "url",
+                ""
             )
 
         if not image_url:
             continue
 
-        candidates.append(
-            {
-                "title":
-                    page.get(
-                        "title",
-                        ""
-                    ),
-                "url":
-                    image_url
-            }
-        )
+        return {
+            "title": page.get(
+                "title",
+                ""
+            ),
+            "url": image_url
+        }
 
-    if not candidates:
-        return None
-
-    return candidates[0]
+    return None
 
 
-# ==========================================
-# CARI FOTO TERBAIK
-# ==========================================
+# ============================================================
+# CARI FOTO
+# ============================================================
 
-def find_image(
+def find_photo(
     scene,
-    index
+    scene_number
 ):
 
-    queries = make_search_keywords(
-        scene,
-        index
-    )
-
     print()
+    print("----------------------------------------")
     print(
-        "Scene",
-        index + 1,
-        "search queries:"
+        "MENCARI FOTO SCENE",
+        scene_number
     )
+    print("----------------------------------------")
+
+    queries = create_keywords(scene)
+
+    if not queries:
+
+        queries = fallback_keywords(
+            scene
+        )
+
+    print("Keyword:")
 
     for query in queries:
 
@@ -528,10 +573,6 @@ def find_image(
             " -",
             query
         )
-
-    # ======================================
-    # COBA SEMUA QUERY
-    # ======================================
 
     for query in queries:
 
@@ -541,123 +582,223 @@ def find_image(
 
         if result:
 
+            print()
             print(
-                "Ditemukan:",
+                "FOTO DITEMUKAN:"
+            )
+
+            print(
                 result["title"]
             )
 
             return result
 
-    # ======================================
-    # FALLBACK DARI VISUAL
-    # ======================================
-
-    visual = scene.get(
-        "visual",
-        ""
+    print(
+        "Tidak ada foto yang ditemukan."
     )
-
-    if visual:
-
-        words = re.findall(
-            r"[a-zA-Z]{3,}",
-            str(visual)
-        )
-
-        simple_query = " ".join(
-            words[:4]
-        )
-
-        if simple_query:
-
-            print(
-                "Fallback:",
-                simple_query
-            )
-
-            result = search_wikimedia(
-                simple_query
-            )
-
-            if result:
-                return result
 
     return None
 
 
-# ==========================================
-# DOWNLOAD SEMUA GAMBAR
-# ==========================================
+# ============================================================
+# BUAT TEXT FILE UNTUK FFMPEG
+# ============================================================
 
-image_files = []
-
-print()
-print("========================================")
-print("MENCARI FOTO UNTUK SETIAP ADEGAN")
-print("========================================")
-
-for index, scene in enumerate(
-    storyboard
+def create_text_file(
+    text,
+    scene_number
 ):
 
-    number = index + 1
-
-    image_file = (
-        f"visual_tmp/"
-        f"image_{number}.jpg"
+    filename = (
+        "visual_tmp/"
+        f"text_{scene_number}.txt"
     )
 
-    result = find_image(
-        scene,
-        index
+    text = clean_text(text)
+
+    if not text:
+
+        text = title
+
+    if len(text) > 180:
+
+        text = text[:177] + "..."
+
+    with open(
+        filename,
+        "w",
+        encoding="utf-8"
+    ) as file:
+
+        file.write(text)
+
+    return filename
+
+
+# ============================================================
+# BUAT VIDEO SCENE
+# ============================================================
+
+def create_scene(
+    image_file,
+    text_file,
+    duration,
+    scene_number
+):
+
+    output = (
+        "visual_tmp/"
+        f"scene_{scene_number}.mp4"
     )
 
-    if result:
+    try:
 
-        success = download_file(
-            result["url"],
-            image_file
+        duration = float(
+            duration
         )
 
-        if success:
+    except Exception:
 
-            image_files.append(
-                image_file
-            )
+        duration = 5
 
-            print(
-                "OK:",
-                image_file
-            )
+    if duration < 2:
+        duration = 2
 
-            continue
+    if duration > 15:
+        duration = 15
+
+    frames = int(
+        duration * FPS
+    )
+
+    # --------------------------------------------------------
+    # FOTO MEMENUHI LAYAR
+    # --------------------------------------------------------
+
+    filter_complex = (
+        "scale="
+        + str(WIDTH)
+        + ":"
+        + str(HEIGHT)
+        + ":force_original_aspect_ratio=increase,"
+        "crop="
+        + str(WIDTH)
+        + ":"
+        + str(HEIGHT)
+        + ","
+        "zoompan="
+        "z='min(zoom+0.0015,1.12)':"
+        "x='iw/2-(iw/zoom/2)':"
+        "y='ih/2-(ih/zoom/2)':"
+        "d="
+        + str(frames)
+        + ":"
+        "s="
+        + str(WIDTH)
+        + "x"
+        + str(HEIGHT)
+        + ":"
+        "fps="
+        + str(FPS)
+        + ","
+        "eq="
+        "contrast=1.05:"
+        "brightness=-0.02:"
+        "saturation=1.05,"
+        "drawbox="
+        "x=0:"
+        "y=0:"
+        "w=iw:"
+        "h=ih:"
+        "color=black@0.12:"
+        "t=fill,"
+        "drawbox="
+        "x=0:"
+        "y=ih-570:"
+        "w=iw:"
+        "h=570:"
+        "color=black@0.52:"
+        "t=fill,"
+        "drawtext="
+        "fontfile="
+        + FONT_BOLD
+        + ":"
+        "textfile="
+        + text_file
+        + ":"
+        "fontcolor=white:"
+        "fontsize=58:"
+        "line_spacing=18:"
+        "x=65:"
+        "y=ih-450:"
+        "shadowcolor=black@0.9:"
+        "shadowx=3:"
+        "shadowy=3"
+    )
 
     print(
-        "TIDAK ADA FOTO UNTUK SCENE",
-        number
+        "Membuat scene:",
+        scene_number
     )
 
-    image_files.append(
-        None
+    command = [
+        "ffmpeg",
+        "-y",
+        "-loop",
+        "1",
+        "-i",
+        image_file,
+        "-vf",
+        filter_complex,
+        "-t",
+        str(duration),
+        "-r",
+        str(FPS),
+        "-c:v",
+        "libx264",
+        "-preset",
+        "veryfast",
+        "-pix_fmt",
+        "yuv420p",
+        "-movflags",
+        "+faststart",
+        output
+    ]
+
+    subprocess.run(
+        command,
+        check=True
     )
 
+    return output
 
-# ==========================================
-# BUAT VIDEO SCENE
-# ==========================================
+
+# ============================================================
+# PROSES SEMUA SCENE
+# ============================================================
 
 scene_files = []
 
 print()
 print("========================================")
-print("MEMBUAT VIDEO DARI FOTO")
+print("MEMPROSES FOTO DAN SCENE")
 print("========================================")
 
 for index, scene in enumerate(
     storyboard
 ):
 
-    number = index + 1
+    scene_number = index + 1
+
+    print()
+    print(
+        "SCENE",
+        scene_number
+    )
+
+    # --------------------------------------------------------
+    # DURASI
+    # --------------------------------------------------------
 
     duration = scene.get(
         "durasi_detik",
@@ -670,362 +811,275 @@ for index, scene in enumerate(
             duration
         )
 
-    except:
+    except Exception:
 
         duration = 5
 
-    if duration < 2:
-        duration = 2
+    # --------------------------------------------------------
+    # TEXT
+    # --------------------------------------------------------
 
-    text = scene.get(
-        "teks_layar",
-        ""
-    )
-
-    if not text:
-
-        text = scene.get(
-            "voice_over",
+    screen_text = clean_text(
+        scene.get(
+            "teks_layar",
             ""
         )
-
-    if not text:
-
-        text = title
-
-    text = " ".join(
-        str(text).split()
     )
 
-    if len(text) > 160:
+    if not screen_text:
 
-        text = (
-            text[:160]
-            + "..."
+        screen_text = clean_text(
+            scene.get(
+                "voice_over",
+                ""
+            )
         )
 
-    text_file = (
-        f"visual_tmp/"
-        f"text_{number}.txt"
+    if not screen_text:
+
+        screen_text = title
+
+    text_file = create_text_file(
+        screen_text,
+        scene_number
     )
 
-    with open(
+    # --------------------------------------------------------
+    # CARI FOTO
+    # --------------------------------------------------------
+
+    photo = find_photo(
+        scene,
+        scene_number
+    )
+
+    if not photo:
+
+        # Coba pencarian umum terakhir
+        print(
+            "Menggunakan foto fallback."
+        )
+
+        photo = search_wikimedia(
+            "person working"
+        )
+
+    if not photo:
+
+        raise SystemExit(
+            "ERROR: Tidak dapat menemukan "
+            "foto untuk scene "
+            + str(scene_number)
+        )
+
+    # --------------------------------------------------------
+    # DOWNLOAD FOTO
+    # --------------------------------------------------------
+
+    image_file = (
+        "visual_tmp/"
+        f"image_{scene_number}.jpg"
+    )
+
+    success = download_file(
+        photo["url"],
+        image_file
+    )
+
+    if not success:
+
+        print(
+            "Download foto gagal."
+        )
+
+        raise SystemExit(
+            "ERROR: Gagal download foto scene "
+            + str(scene_number)
+        )
+
+    # --------------------------------------------------------
+    # BUAT VIDEO
+    # --------------------------------------------------------
+
+    scene_video = create_scene(
+        image_file,
         text_file,
-        "w",
-        encoding="utf-8"
-    ) as f:
-
-        f.write(
-            text
-        )
-
-    scene_file = (
-        f"visual_tmp/"
-        f"scene_{number}.mp4"
+        duration,
+        scene_number
     )
 
-    image_file = image_files[
-        index
-    ]
-
-    # ======================================
-    # FOTO DITEMUKAN
-    # ======================================
-
-    if image_file:
-
-        print(
-            f"Render scene {number}"
-        )
-
-        # Foto dibuat memenuhi layar
-        # kemudian diberi gerakan zoom.
-        filter_video = (
-
-            "scale="
-            f"{WIDTH*2}:"
-            f"{HEIGHT*2}:"
-            "force_original_aspect_ratio=increase,"
-
-            f"crop={WIDTH*2}:{HEIGHT*2},"
-
-            "zoompan="
-            "z='min(zoom+0.0018,1.15)':"
-            "x='iw/2-(iw/zoom/2)':"
-            "y='ih/2-(ih/zoom/2)':"
-            f"d={int(duration * FPS)}:"
-            f"s={WIDTH}x{HEIGHT}:"
-            f"fps={FPS},"
-
-            # sedikit peningkatan gambar
-            "eq="
-            "contrast=1.05:"
-            "brightness=-0.02:"
-            "saturation=1.08,"
-
-            # overlay gelap
-            "drawbox="
-            "x=0:"
-            "y=0:"
-            "w=iw:"
-            "h=ih:"
-            "color=black@0.16:"
-            "t=fill,"
-
-            # bagian bawah untuk subtitle
-            "drawbox="
-            "x=0:"
-            "y=ih-560:"
-            "w=iw:"
-            "h=560:"
-            "color=black@0.50:"
-            "t=fill,"
-
-            # nomor adegan
-            f"drawtext="
-            f"fontfile={FONT_BOLD}:"
-            f"text='0{number}':"
-            "fontcolor=white@0.9:"
-            "fontsize=34:"
-            "x=60:"
-            "y=70:"
-            "shadowcolor=black@0.9:"
-            "shadowx=2:"
-            "shadowy=2,"
-
-            # teks utama
-            f"drawtext="
-            f"fontfile={FONT_BOLD}:"
-            f"textfile={text_file}:"
-            "fontcolor=white:"
-            "fontsize=58:"
-            "line_spacing=20:"
-            "x=65:"
-            "y=ih-450:"
-            "shadowcolor=black@0.95:"
-            "shadowx=3:"
-            "shadowy=3"
-        )
-
-        subprocess.run(
-            [
-                "ffmpeg",
-                "-y",
-                "-loop",
-                "1",
-                "-i",
-                image_file,
-                "-vf",
-                filter_video,
-                "-t",
-                str(duration),
-                "-r",
-                str(FPS),
-                "-c:v",
-                "libx264",
-                "-preset",
-                "veryfast",
-                "-pix_fmt",
-                "yuv420p",
-                scene_file
-            ],
-            check=True
-        )
-
-        scene_files.append(
-            scene_file
-        )
-
-    # ======================================
-    # JIKA FOTO GAGAL
-    # ======================================
-
-    else:
-
-        print(
-            "Scene",
-            number,
-            "tidak memiliki foto."
-        )
-
-        # Jangan membuat kotak palsu.
-        # Gunakan foto fallback umum.
-        fallback_query = (
-            "person activity"
-        )
-
-        result = search_wikimedia(
-            fallback_query
-        )
-
-        if not result:
-
-            raise SystemExit(
-                "Tidak dapat menemukan "
-                "foto untuk scene "
-                + str(number)
-            )
-
-        fallback_file = (
-            f"visual_tmp/"
-            f"fallback_{number}.jpg"
-        )
-
-        if not download_file(
-            result["url"],
-            fallback_file
-        ):
-
-            raise SystemExit(
-                "Gagal download "
-                "fallback image."
-            )
-
-        image_files[
-            index
-        ] = fallback_file
-
-        filter_video = (
-
-            "scale="
-            f"{WIDTH*2}:"
-            f"{HEIGHT*2}:"
-            "force_original_aspect_ratio=increase,"
-
-            f"crop={WIDTH*2}:{HEIGHT*2},"
-
-            "zoompan="
-            "z='min(zoom+0.0015,1.12)':"
-            "x='iw/2-(iw/zoom/2)':"
-            "y='ih/2-(ih/zoom/2)':"
-            f"d={int(duration * FPS)}:"
-            f"s={WIDTH}x{HEIGHT}:"
-            f"fps={FPS},"
-
-            "drawbox="
-            "x=0:"
-            "y=0:"
-            "w=iw:"
-            "h=ih:"
-            "color=black@0.12:"
-            "t=fill,"
-
-            "drawbox="
-            "x=0:"
-            "y=ih-560:"
-            "w=iw:"
-            "h=560:"
-            "color=black@0.50:"
-            "t=fill,"
-
-            f"drawtext="
-            f"fontfile={FONT_BOLD}:"
-            f"textfile={text_file}:"
-            "fontcolor=white:"
-            "fontsize=58:"
-            "line_spacing=20:"
-            "x=65:"
-            "y=ih-450:"
-            "shadowcolor=black@0.95:"
-            "shadowx=3:"
-            "shadowy=3"
-        )
-
-        subprocess.run(
-            [
-                "ffmpeg",
-                "-y",
-                "-loop",
-                "1",
-                "-i",
-                fallback_file,
-                "-vf",
-                filter_video,
-                "-t",
-                str(duration),
-                "-r",
-                str(FPS),
-                "-c:v",
-                "libx264",
-                "-preset",
-                "veryfast",
-                "-pix_fmt",
-                "yuv420p",
-                scene_file
-            ],
-            check=True
-        )
-
-        scene_files.append(
-            scene_file
-        )
+    scene_files.append(
+        scene_video
+    )
 
 
-# ==========================================
-# CONCAT
-# ==========================================
+# ============================================================
+# CEK SCENE
+# ============================================================
+
+if not scene_files:
+
+    raise SystemExit(
+        "ERROR: Tidak ada scene video."
+    )
+
+
+print()
+print("Jumlah scene berhasil:")
+print(len(scene_files))
+
+
+# ============================================================
+# BUAT CONCAT FILE
+# ============================================================
 
 concat_file = (
-    "visual_tmp/"
-    "concat.txt"
+    "visual_tmp/concat.txt"
 )
 
 with open(
     concat_file,
     "w",
     encoding="utf-8"
-) as f:
+) as file:
 
     for scene_file in scene_files:
 
-        f.write(
+        absolute_path = os.path.abspath(
+            scene_file
+        )
+
+        file.write(
             "file '"
-            + os.path.abspath(
-                scene_file
-            )
+            + absolute_path
             + "'\n"
         )
 
 
-# ==========================================
-# GABUNG
-# ==========================================
+# ============================================================
+# NAMA VIDEO FINAL
+# ============================================================
 
-print()
-print(
-    "Menggabungkan semua scene..."
+timestamp = datetime.now().strftime(
+    "%Y-%m-%d_%H-%M-%S"
 )
 
+output_video = (
+    "visuals/"
+    "FBPro_Visual_"
+    + timestamp
+    + ".mp4"
+)
+
+
+# ============================================================
+# GABUNG SEMUA SCENE
+# ============================================================
+
+print()
+print("========================================")
+print("MENGGABUNGKAN SEMUA SCENE")
+print("========================================")
+print()
+
+command = [
+    "ffmpeg",
+    "-y",
+    "-f",
+    "concat",
+    "-safe",
+    "0",
+    "-i",
+    concat_file,
+    "-c:v",
+    "libx264",
+    "-preset",
+    "veryfast",
+    "-pix_fmt",
+    "yuv420p",
+    "-movflags",
+    "+faststart",
+    output_video
+]
+
 subprocess.run(
-    [
-        "ffmpeg",
-        "-y",
-        "-f",
-        "concat",
-        "-safe",
-        "0",
-        "-i",
-        concat_file,
-        "-c:v",
-        "libx264",
-        "-preset",
-        "veryfast",
-        "-pix_fmt",
-        "yuv420p",
-        output_video
-    ],
+    command,
     check=True
 )
 
-# ==========================================
+
+# ============================================================
+# VALIDASI VIDEO
+# ============================================================
+
+if not os.path.exists(
+    output_video
+):
+
+    raise SystemExit(
+        "ERROR: Video final tidak ditemukan."
+    )
+
+file_size = os.path.getsize(
+    output_video
+)
+
+if file_size < 100000:
+
+    raise SystemExit(
+        "ERROR: Ukuran video terlalu kecil."
+    )
+
+
+# ============================================================
 # SELESAI
-# ==========================================
+# ============================================================
 
 print()
 print("========================================")
-print("FBPRO VISUAL AGENT V4 BERHASIL")
+print("FBPRO VISUAL AGENT BERHASIL")
 print("========================================")
 print()
+
+print(
+    "Production :",
+    latest_production
+)
+
+print(
+    "Video      :",
+    output_video
+)
+
+print(
+    "Ukuran     :",
+    file_size,
+    "bytes"
+)
+
+print(
+    "Resolusi   :",
+    str(WIDTH)
+    + "x"
+    + str(HEIGHT)
+)
+
+print(
+    "Rasio      : 9:16"
+)
+
+print(
+    "FPS        :",
+    FPS
+)
+
 print()
-    "Sumber :",
-   
+print(
+    "Video menggunakan foto nyata "
+    "dari Wikimedia Commons."
+)
+
+print()
+print(
+    "Selesai."
+)
