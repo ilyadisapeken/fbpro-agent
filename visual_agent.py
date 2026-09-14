@@ -3,7 +3,6 @@ import json
 import glob
 import urllib.parse
 import urllib.request
-import urllib.error
 import subprocess
 import re
 from datetime import datetime
@@ -19,13 +18,19 @@ FPS = 30
 FONT_BOLD = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
 FONT_REGULAR = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
 
+GEMINI_API_KEY = os.environ.get(
+    "GEMINI_API_KEY"
+)
+
+GEMINI_MODEL = "gemini-3.1-flash-lite"
+
 WIKIMEDIA_API = (
     "https://commons.wikimedia.org/w/api.php"
 )
 
 USER_AGENT = (
-    "FBProVisualAgent/1.0 "
-    "(GitHub Actions; educational project)"
+    "FBProVisualAgent/4.0 "
+    "(GitHub Actions)"
 )
 
 # ==========================================
@@ -46,6 +51,7 @@ latest_file = max(
     key=os.path.getmtime
 )
 
+print()
 print("Production source:")
 print(latest_file)
 
@@ -54,10 +60,11 @@ with open(
     "r",
     encoding="utf-8"
 ) as f:
+
     data = json.load(f)
 
 # ==========================================
-# DATA VIDEO
+# DATA
 # ==========================================
 
 video_info = data.get(
@@ -114,10 +121,10 @@ output_video = (
 )
 
 # ==========================================
-# FUNGSI HTTP
+# HTTP JSON
 # ==========================================
 
-def http_get_json(url):
+def get_json(url):
 
     request = urllib.request.Request(
         url,
@@ -128,7 +135,7 @@ def http_get_json(url):
 
     with urllib.request.urlopen(
         request,
-        timeout=30
+        timeout=40
     ) as response:
 
         return json.loads(
@@ -139,7 +146,7 @@ def http_get_json(url):
 
 
 # ==========================================
-# DOWNLOAD FILE
+# DOWNLOAD
 # ==========================================
 
 def download_file(
@@ -147,14 +154,14 @@ def download_file(
     destination
 ):
 
-    request = urllib.request.Request(
-        url,
-        headers={
-            "User-Agent": USER_AGENT
-        }
-    )
-
     try:
+
+        request = urllib.request.Request(
+            url,
+            headers={
+                "User-Agent": USER_AGENT
+            }
+        )
 
         with urllib.request.urlopen(
             request,
@@ -162,6 +169,9 @@ def download_file(
         ) as response:
 
             content = response.read()
+
+        if len(content) < 10000:
+            return False
 
         with open(
             destination,
@@ -175,7 +185,7 @@ def download_file(
     except Exception as error:
 
         print(
-            "Download gagal:",
+            "Download error:",
             error
         )
 
@@ -183,54 +193,216 @@ def download_file(
 
 
 # ==========================================
-# BERSIHKAN QUERY
+# GEMINI:
+# BUAT SEARCH KEYWORDS
 # ==========================================
 
-def clean_query(text):
+def make_search_keywords(
+    scene,
+    index
+):
 
-    if not text:
-        return ""
-
-    text = str(text)
-
-    # Hapus karakter aneh
-    text = re.sub(
-        r"[^a-zA-Z0-9À-ÿ\s-]",
-        " ",
-        text
+    visual = scene.get(
+        "visual",
+        ""
     )
 
-    text = " ".join(
-        text.split()
+    voice = scene.get(
+        "voice_over",
+        ""
     )
 
-    # Terlalu panjang membuat pencarian buruk
-    words = text.split()
+    screen = scene.get(
+        "teks_layar",
+        ""
+    )
 
-    if len(words) > 12:
-        words = words[:12]
+    prompt = ""
 
-    return " ".join(words)
+    if index < len(
+        visual_prompts
+    ):
+
+        item = visual_prompts[
+            index
+        ]
+
+        if isinstance(
+            item,
+            dict
+        ):
+
+            prompt = item.get(
+                "prompt",
+                ""
+            )
+
+    instruction = f"""
+You create search keywords for a stock/photo
+search engine.
+
+Create 5 different SHORT English search queries
+for a real photograph matching this video scene.
+
+Do NOT create an image.
+Do NOT explain anything.
+
+Each query must contain only 2-6 simple words.
+
+Avoid abstract words.
+
+Prefer concrete things such as:
+person, seller, shop, phone, money,
+food, laptop, home, street, family,
+morning, office, market, customer,
+working, walking, cooking, studying.
+
+Scene visual:
+{visual}
+
+Voice:
+{voice}
+
+On screen:
+{screen}
+
+AI visual prompt:
+{prompt}
+
+Return ONLY JSON:
+
+{{
+  "queries": [
+    "query one",
+    "query two",
+    "query three",
+    "query four",
+    "query five"
+  ]
+}}
+"""
+
+    if not GEMINI_API_KEY:
+        return []
+
+    url = (
+        "https://generativelanguage.googleapis.com/"
+        "v1beta/models/"
+        f"{GEMINI_MODEL}:generateContent"
+    )
+
+    body = {
+        "contents": [
+            {
+                "parts": [
+                    {
+                        "text": instruction
+                    }
+                ]
+            }
+        ],
+        "generationConfig": {
+            "temperature": 0.3,
+            "responseMimeType": "application/json"
+        }
+    }
+
+    try:
+
+        request = urllib.request.Request(
+            url,
+            data=json.dumps(
+                body
+            ).encode(
+                "utf-8"
+            ),
+            headers={
+                "Content-Type":
+                    "application/json",
+                "x-goog-api-key":
+                    GEMINI_API_KEY,
+                "User-Agent":
+                    USER_AGENT
+            },
+            method="POST"
+        )
+
+        with urllib.request.urlopen(
+            request,
+            timeout=90
+        ) as response:
+
+            result = json.loads(
+                response.read().decode(
+                    "utf-8"
+                )
+            )
+
+        text = (
+            result
+            ["candidates"][0]
+            ["content"]["parts"][0]
+            ["text"]
+        )
+
+        parsed = json.loads(
+            text
+        )
+
+        queries = parsed.get(
+            "queries",
+            []
+        )
+
+        if not isinstance(
+            queries,
+            list
+        ):
+
+            return []
+
+        cleaned = []
+
+        for query in queries:
+
+            query = str(
+                query
+            )
+
+            query = re.sub(
+                r"[^a-zA-Z0-9\s-]",
+                " ",
+                query
+            )
+
+            query = " ".join(
+                query.split()
+            )
+
+            if query:
+                cleaned.append(
+                    query[:80]
+                )
+
+        return cleaned
+
+    except Exception as error:
+
+        print(
+            "Gemini keyword error:",
+            error
+        )
+
+        return []
 
 
 # ==========================================
-# CARI GAMBAR WIKIMEDIA COMMONS
+# WIKIMEDIA SEARCH
 # ==========================================
 
-def search_wikimedia(query):
-
-    query = clean_query(
-        query
-    )
-
-    if not query:
-        return None
-
-    print()
-    print(
-        "Mencari visual:",
-        query
-    )
+def search_wikimedia(
+    query
+):
 
     params = {
         "action": "query",
@@ -238,10 +410,10 @@ def search_wikimedia(query):
         "generator": "search",
         "gsrsearch": query,
         "gsrnamespace": "6",
-        "gsrlimit": "8",
+        "gsrlimit": "10",
         "prop": "imageinfo",
         "iiprop": "url|mime",
-        "iiurlwidth": "1080"
+        "iiurlwidth": "1200"
     }
 
     url = (
@@ -254,7 +426,7 @@ def search_wikimedia(query):
 
     try:
 
-        result = http_get_json(
+        result = get_json(
             url
         )
 
@@ -277,15 +449,15 @@ def search_wikimedia(query):
 
     for page in pages.values():
 
-        imageinfo = page.get(
+        info_list = page.get(
             "imageinfo",
             []
         )
 
-        if not imageinfo:
+        if not info_list:
             continue
 
-        info = imageinfo[0]
+        info = info_list[0]
 
         mime = info.get(
             "mime",
@@ -295,6 +467,7 @@ def search_wikimedia(query):
         if not mime.startswith(
             "image/"
         ):
+
             continue
 
         image_url = info.get(
@@ -302,6 +475,7 @@ def search_wikimedia(query):
         )
 
         if not image_url:
+
             image_url = info.get(
                 "url"
             )
@@ -311,11 +485,13 @@ def search_wikimedia(query):
 
         candidates.append(
             {
-                "title": page.get(
-                    "title",
-                    ""
-                ),
-                "url": image_url
+                "title":
+                    page.get(
+                        "title",
+                        ""
+                    ),
+                "url":
+                    image_url
             }
         )
 
@@ -326,113 +502,98 @@ def search_wikimedia(query):
 
 
 # ==========================================
-# CARI VISUAL UNTUK SCENE
+# CARI FOTO TERBAIK
 # ==========================================
 
-def find_visual(
+def find_image(
     scene,
     index
 ):
 
-    # --------------------------------------
-    # Ambil visual prompt jika tersedia
-    # --------------------------------------
-
-    prompt = ""
-
-    if index < len(
-        visual_prompts
-    ):
-
-        item = visual_prompts[
-            index
-        ]
-
-        if isinstance(
-            item,
-            dict
-        ):
-
-            prompt = item.get(
-                "prompt",
-                ""
-            )
-
-    # --------------------------------------
-    # Visual storyboard
-    # --------------------------------------
-
-    visual = scene.get(
-        "visual",
-        ""
+    queries = make_search_keywords(
+        scene,
+        index
     )
 
-    # --------------------------------------
-    # Judul
-    # --------------------------------------
+    print()
+    print(
+        "Scene",
+        index + 1,
+        "search queries:"
+    )
 
-    scene_title = title
+    for query in queries:
 
-    # --------------------------------------
-    # Prioritas pencarian
-    # --------------------------------------
-
-    queries = []
-
-    if prompt:
-        queries.append(
-            prompt
+        print(
+            " -",
+            query
         )
 
-    if visual:
-        queries.append(
-            visual
-        )
+    # ======================================
+    # COBA SEMUA QUERY
+    # ======================================
 
-    if theme:
-        queries.append(
-            theme
-        )
-
-    # Tambahkan query sederhana
-    # berdasarkan kata penting
-
-    for original_query in queries:
-
-        query = clean_query(
-            original_query
-        )
-
-        if not query:
-            continue
+    for query in queries:
 
         result = search_wikimedia(
             query
         )
 
         if result:
+
+            print(
+                "Ditemukan:",
+                result["title"]
+            )
+
             return result
 
-    # --------------------------------------
-    # Fallback berdasarkan judul
-    # --------------------------------------
+    # ======================================
+    # FALLBACK DARI VISUAL
+    # ======================================
 
-    result = search_wikimedia(
-        scene_title
+    visual = scene.get(
+        "visual",
+        ""
     )
 
-    return result
+    if visual:
+
+        words = re.findall(
+            r"[a-zA-Z]{3,}",
+            str(visual)
+        )
+
+        simple_query = " ".join(
+            words[:4]
+        )
+
+        if simple_query:
+
+            print(
+                "Fallback:",
+                simple_query
+            )
+
+            result = search_wikimedia(
+                simple_query
+            )
+
+            if result:
+                return result
+
+    return None
 
 
 # ==========================================
-# DOWNLOAD VISUAL SCENE
+# DOWNLOAD SEMUA GAMBAR
 # ==========================================
 
 image_files = []
 
 print()
 print("========================================")
-print("MENCARI VISUAL ASLI")
+print("MENCARI FOTO UNTUK SETIAP ADEGAN")
 print("========================================")
 
 for index, scene in enumerate(
@@ -441,23 +602,17 @@ for index, scene in enumerate(
 
     number = index + 1
 
-    result = find_visual(
-        scene,
-        index
-    )
-
     image_file = (
         f"visual_tmp/"
         f"image_{number}.jpg"
     )
 
-    if result:
+    result = find_image(
+        scene,
+        index
+    )
 
-        print()
-        print(
-            f"Scene {number}:",
-            result["title"]
-        )
+    if result:
 
         success = download_file(
             result["url"],
@@ -470,11 +625,16 @@ for index, scene in enumerate(
                 image_file
             )
 
+            print(
+                "OK:",
+                image_file
+            )
+
             continue
 
     print(
-        f"Scene {number}: "
-        "tidak menemukan gambar."
+        "TIDAK ADA FOTO UNTUK SCENE",
+        number
     )
 
     image_files.append(
@@ -483,19 +643,15 @@ for index, scene in enumerate(
 
 
 # ==========================================
-# BUAT SCENE VIDEO
+# BUAT VIDEO SCENE
 # ==========================================
 
 scene_files = []
 
 print()
 print("========================================")
-print("MEMBUAT VIDEO DARI VISUAL")
+print("MEMBUAT VIDEO DARI FOTO")
 print("========================================")
-
-total_scenes = len(
-    storyboard
-)
 
 for index, scene in enumerate(
     storyboard
@@ -503,66 +659,54 @@ for index, scene in enumerate(
 
     number = index + 1
 
-    # --------------------------------------
-    # DURASI
-    # --------------------------------------
-
     duration = scene.get(
         "durasi_detik",
         5
     )
 
     try:
+
         duration = float(
             duration
         )
+
     except:
+
         duration = 5
 
     if duration < 2:
         duration = 2
 
-    # --------------------------------------
-    # TEKS
-    # --------------------------------------
-
-    screen_text = scene.get(
+    text = scene.get(
         "teks_layar",
         ""
     )
 
-    if not screen_text:
+    if not text:
 
-        screen_text = scene.get(
+        text = scene.get(
             "voice_over",
             ""
         )
 
-    if not screen_text:
+    if not text:
 
-        screen_text = title
+        text = title
 
-    screen_text = str(
-        screen_text
+    text = " ".join(
+        str(text).split()
     )
 
-    screen_text = " ".join(
-        screen_text.split()
-    )
+    if len(text) > 160:
 
-    if len(screen_text) > 180:
-        screen_text = (
-            screen_text[:180]
+        text = (
+            text[:160]
             + "..."
         )
 
-    # --------------------------------------
-    # FILE TEKS
-    # --------------------------------------
-
     text_file = (
         f"visual_tmp/"
-        f"screen_{number}.txt"
+        f"text_{number}.txt"
     )
 
     with open(
@@ -572,12 +716,8 @@ for index, scene in enumerate(
     ) as f:
 
         f.write(
-            screen_text
+            text
         )
-
-    # --------------------------------------
-    # SCENE OUTPUT
-    # --------------------------------------
 
     scene_file = (
         f"visual_tmp/"
@@ -588,111 +728,83 @@ for index, scene in enumerate(
         index
     ]
 
-    print(
-        f"Scene {number}/{total_scenes}"
-    )
-
     # ======================================
-    # JIKA ADA GAMBAR
+    # FOTO DITEMUKAN
     # ======================================
 
     if image_file:
 
-        # ----------------------------------
-        # Gerakan kamera
-        # ----------------------------------
+        print(
+            f"Render scene {number}"
+        )
 
-        # zoom perlahan + sedikit pan
-        zoom_filter = (
+        # Foto dibuat memenuhi layar
+        # kemudian diberi gerakan zoom.
+        filter_video = (
+
             "scale="
             f"{WIDTH*2}:"
             f"{HEIGHT*2}:"
             "force_original_aspect_ratio=increase,"
+
             f"crop={WIDTH*2}:{HEIGHT*2},"
+
             "zoompan="
-            "z='min(zoom+0.0015,1.12)':"
+            "z='min(zoom+0.0018,1.15)':"
             "x='iw/2-(iw/zoom/2)':"
             "y='ih/2-(ih/zoom/2)':"
             f"d={int(duration * FPS)}:"
             f"s={WIDTH}x{HEIGHT}:"
-            f"fps={FPS}"
-        )
+            f"fps={FPS},"
 
-        # ----------------------------------
-        # Overlay gelap
-        # ----------------------------------
-
-        filter_complex = (
-
-            f"[0:v]"
-            f"{zoom_filter},"
+            # sedikit peningkatan gambar
             "eq="
-            "contrast=1.04:"
-            "brightness=-0.03:"
+            "contrast=1.05:"
+            "brightness=-0.02:"
             "saturation=1.08,"
+
+            # overlay gelap
             "drawbox="
             "x=0:"
             "y=0:"
             "w=iw:"
             "h=ih:"
-            "color=black@0.18:"
+            "color=black@0.16:"
             "t=fill,"
-            
-            # top gradient-like panel
+
+            # bagian bawah untuk subtitle
             "drawbox="
             "x=0:"
-            "y=0:"
+            "y=ih-560:"
             "w=iw:"
-            "h=250:"
-            "color=black@0.42:"
+            "h=560:"
+            "color=black@0.50:"
             "t=fill,"
-            
-            # bottom panel
-            "drawbox="
-            "x=0:"
-            "y=ih-520:"
-            "w=iw:"
-            "h=520:"
-            "color=black@0.55:"
-            "t=fill,"
-            
-            # teks
+
+            # nomor adegan
+            f"drawtext="
+            f"fontfile={FONT_BOLD}:"
+            f"text='0{number}':"
+            "fontcolor=white@0.9:"
+            "fontsize=34:"
+            "x=60:"
+            "y=70:"
+            "shadowcolor=black@0.9:"
+            "shadowx=2:"
+            "shadowy=2,"
+
+            # teks utama
             f"drawtext="
             f"fontfile={FONT_BOLD}:"
             f"textfile={text_file}:"
             "fontcolor=white:"
             "fontsize=58:"
-            "line_spacing=18:"
-            "x=70:"
-            "y=h-440:"
-            "box=0:"
-            "shadowcolor=black@0.9:"
+            "line_spacing=20:"
+            "x=65:"
+            "y=ih-450:"
+            "shadowcolor=black@0.95:"
             "shadowx=3:"
-            "shadowy=3,"
-            
-            # nomor scene
-            f"drawtext="
-            f"fontfile={FONT_BOLD}:"
-            f"text='0{number}':"
-            "fontcolor=white@0.85:"
-            "fontsize=34:"
-            "x=70:"
-            "y=75:"
-            "shadowcolor=black@0.8:"
-            "shadowx=2:"
-            "shadowy=2,"
-            
-            # branding kecil
-            f"drawtext="
-            f"fontfile={FONT_REGULAR}:"
-            "text='FBPRO ORIGINAL':"
-            "fontcolor=white@0.75:"
-            "fontsize=28:"
-            "x=70:"
-            "y=125:"
-            "shadowcolor=black@0.7:"
-            "shadowx=2:"
-            "shadowy=2"
+            "shadowy=3"
         )
 
         subprocess.run(
@@ -704,7 +816,7 @@ for index, scene in enumerate(
                 "-i",
                 image_file,
                 "-vf",
-                filter_complex,
+                filter_video,
                 "-t",
                 str(duration),
                 "-r",
@@ -720,20 +832,90 @@ for index, scene in enumerate(
             check=True
         )
 
+        scene_files.append(
+            scene_file
+        )
+
     # ======================================
-    # FALLBACK JIKA GAMBAR TIDAK ADA
+    # JIKA FOTO GAGAL
     # ======================================
 
     else:
 
-        filter_complex = (
+        print(
+            "Scene",
+            number,
+            "tidak memiliki foto."
+        )
+
+        # Jangan membuat kotak palsu.
+        # Gunakan foto fallback umum.
+        fallback_query = (
+            "person activity"
+        )
+
+        result = search_wikimedia(
+            fallback_query
+        )
+
+        if not result:
+
+            raise SystemExit(
+                "Tidak dapat menemukan "
+                "foto untuk scene "
+                + str(number)
+            )
+
+        fallback_file = (
+            f"visual_tmp/"
+            f"fallback_{number}.jpg"
+        )
+
+        if not download_file(
+            result["url"],
+            fallback_file
+        ):
+
+            raise SystemExit(
+                "Gagal download "
+                "fallback image."
+            )
+
+        image_files[
+            index
+        ] = fallback_file
+
+        filter_video = (
+
+            "scale="
+            f"{WIDTH*2}:"
+            f"{HEIGHT*2}:"
+            "force_original_aspect_ratio=increase,"
+
+            f"crop={WIDTH*2}:{HEIGHT*2},"
+
+            "zoompan="
+            "z='min(zoom+0.0015,1.12)':"
+            "x='iw/2-(iw/zoom/2)':"
+            "y='ih/2-(ih/zoom/2)':"
+            f"d={int(duration * FPS)}:"
+            f"s={WIDTH}x{HEIGHT}:"
+            f"fps={FPS},"
 
             "drawbox="
             "x=0:"
             "y=0:"
             "w=iw:"
             "h=ih:"
-            "color=#111827:"
+            "color=black@0.12:"
+            "t=fill,"
+
+            "drawbox="
+            "x=0:"
+            "y=ih-560:"
+            "w=iw:"
+            "h=560:"
+            "color=black@0.50:"
             "t=fill,"
 
             f"drawtext="
@@ -741,13 +923,10 @@ for index, scene in enumerate(
             f"textfile={text_file}:"
             "fontcolor=white:"
             "fontsize=58:"
-            "line_spacing=18:"
-            "x=70:"
-            "y=(h-text_h)/2:"
-            "box=1:"
-            "boxcolor=black@0.5:"
-            "boxborderw=35:"
-            "shadowcolor=black@0.8:"
+            "line_spacing=20:"
+            "x=65:"
+            "y=ih-450:"
+            "shadowcolor=black@0.95:"
             "shadowx=3:"
             "shadowy=3"
         )
@@ -756,16 +935,12 @@ for index, scene in enumerate(
             [
                 "ffmpeg",
                 "-y",
-                "-f",
-                "lavfi",
+                "-loop",
+                "1",
                 "-i",
-                (
-                    f"color=c=#111827:"
-                    f"s={WIDTH}x{HEIGHT}:"
-                    f"r={FPS}"
-                ),
+                fallback_file,
                 "-vf",
-                filter_complex,
+                filter_video,
                 "-t",
                 str(duration),
                 "-r",
@@ -781,9 +956,9 @@ for index, scene in enumerate(
             check=True
         )
 
-    scene_files.append(
-        scene_file
-    )
+        scene_files.append(
+            scene_file
+        )
 
 
 # ==========================================
@@ -803,23 +978,23 @@ with open(
 
     for scene_file in scene_files:
 
-        absolute_path = os.path.abspath(
-            scene_file
-        )
-
         f.write(
-            f"file '{absolute_path}'\n"
+            "file '"
+            + os.path.abspath(
+                scene_file
+            )
+            + "'\n"
         )
 
 
 # ==========================================
-# GABUNG SEMUA SCENE
+# GABUNG
 # ==========================================
 
 print()
-print("========================================")
-print("MENGGABUNGKAN VIDEO")
-print("========================================")
+print(
+    "Menggabungkan semua scene..."
+)
 
 subprocess.run(
     [
@@ -842,33 +1017,15 @@ subprocess.run(
     check=True
 )
 
-
 # ==========================================
-# INFO
+# SELESAI
 # ==========================================
 
 print()
 print("========================================")
-print("FBPRO VISUAL AGENT V3 BERHASIL")
+print("FBPRO VISUAL AGENT V4 BERHASIL")
 print("========================================")
 print()
 print(
-    f"Sumber : {latest_file}"
-)
-print(
-    f"Video  : {output_video}"
-)
-print()
-print(
-    "Visual : Wikimedia Commons"
-)
-print(
-    "Format : 1080x1920"
-)
-print(
-    "Rasio  : 9:16"
-)
-print(
-    "FPS    : 30"
-)
-print()
+    "Sumber :",
+   
