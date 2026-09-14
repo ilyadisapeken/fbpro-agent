@@ -1,0 +1,118 @@
+{
+  "video": {
+    "judul": "Kenapa Kita Sering Lupa Saat Masuk Pintu?",
+    "tema": "Fakta Unik Psikologi",
+    "durasi_detik": 45,
+    "target_penonton": "Pengguna Facebook yang menyukai konten edukasi ringan dan relatable.",
+    "gaya": "Informatif, santai, dan relatable."
+  },
+  "hook": "Pernah nggak sih, niatnya mau ambil sesuatu, tapi pas sampai depan pintu kamu malah bengong lupa mau ngapain?",
+  "voice_over": "Pernah nggak sih, niatnya mau ambil sesuatu, tapi pas sampai depan pintu kamu malah bengong lupa mau ngapain? Tenang, kamu nggak sendirian. Fenomena ini namanya 'Doorway Effect'. Otak kita itu menganggap pintu sebagai batas antar ruang. Saat kita melewati pintu, otak melakukan 'reset' memori jangka pendek supaya bisa fokus sama ruangan baru. Sayangnya, memori tentang apa yang mau kita ambil jadi ikut terhapus. Jadi, ini bukan karena kita pelupa ya, tapi cara otak beradaptasi dengan lingkungan baru. Ternyata otak kita canggih, tapi kadang bikin bingung sendiri, ya?",
+  "storyboard": [
+    {
+      "adegan": 1,
+      "durasi_detik": 5,
+      "visual": "Kreator berdiri di depan pintu kamar dengan ekspresi bingung dan menggaruk kepala.",
+      "voice_over": "Pernah nggak sih, niatnya mau ambil sesuatu, tapi pas sampai depan pintu kamu malah bengong lupa mau ngapain?",
+      "teks_layar": "Sering bengong di depan pintu?",
+      "transisi": "Cut"
+    },
+    {
+      "adegan": 2,
+      "durasi_detik": 6,
+      "visual": "Kreator berjalan melewati pintu dengan gerakan sedikit dipercepat.",
+      "voice_over": "Tenang, kamu nggak sendirian. Fenomena ini namanya 'Doorway Effect'.",
+      "teks_layar": "Doorway Effect",
+      "transisi": "Dissolve"
+    },
+    {
+      "adegan": 3,
+      "durasi_detik": 8,
+      "visual": "Kreator duduk santai, menunjuk ke arah pelipis/otak sambil tersenyum.",
+      "voice_over": "Otak kita menganggap pintu sebagai batas antar ruang. Saat melewati pintu, otak melakukan 'reset' memori jangka pendek.",
+      "teks_layar": "Otak melakukan 'Reset'",
+      "transisi": "Cut"
+    },
+    {
+      "adegan": 4,
+      "durasi_detik": 8,
+      "visual": "Kreator terlihat berpikir keras sambil memegang dagu.",
+      "voice_over": "Sayangnya, memori tentang apa yang mau kita ambil jadi ikut terhapus karena fokus berpindah ke ruangan baru.",
+      "teks_layar": "Fokus berpindah",
+      "transisi": "Zoom in"
+    },
+    {
+      "adegan": 5,
+      "durasi_detik": 9,
+      "visual": "Kreator menjelaskan ke arah kamera dengan gestur meyakinkan.",
+      "voice_over": "Jadi, ini bukan karena kita pelupa, tapi cara otak beradaptasi dengan lingkungan baru.",
+      "teks_layar": "Bukan karena pelupa!",
+      "transisi": "Cut"
+    },
+    {
+      "adegan": 6,
+      "durasi_detik": 9,
+      "visual": "Kreator tertawa kecil ke arah kamera.",
+      "voice_over": "Ternyata otak kita canggih, tapi kadang bikin bingung sendiri, ya?",
+      "teks_layar": "Otak canggih tapi lucu",
+      "transisi": "Fade out"
+    }
+  ],
+  "thumbnail_text": [
+    "Kenapa Suka Lupa Pas Masuk Pintu?",
+    "Fakta Unik: Doorway Effect",
+    "Otak Kamu 'Reset' Sendiri?"
+  ],
+  "caption": "Pernah ngalamin momen 'blank' pas masuk ruangan? Ternyata ada penjelasan ilmiahnya, lho! Namanya Doorway Effect. Bukan karena pelupa, tapi karena otak kita lagi sibuk 'reset' fokus saat berpindah ruang. Siapa yang sering banget kayak gini juga?",
+  "cta": "Coba tag temen kamu yang sering bengong pas jalan, biar dia nggak ngerasa sendirian!",
+  "hashtag": [
+    "#faktaunik",
+    "#serunyabelajar",
+    "#doorwayeffect",
+    "#facebookindonesia",
+    "#edukasisingkat",
+    "#psikologi",
+    "#infomenarik"
+  ],
+  "visual_prompts": [
+    {
+      "adegan": 1,
+      "prompt": "Portrait photography, a person standing at a doorway looking confused and scratching head, cinematic lighting, 9:16 aspect ratio."
+    },
+    {
+      "adegan": 2,
+      "prompt": "Person walking quickly through a doorway, motion blur, 9:16 aspect ratio."
+    },
+    {
+      "adegan": 3,
+      "prompt": "Person sitting comfortably, pointing at their temple indicating brain activity, bright home interior, 9:16 aspect ratio."
+    },
+    {
+      "adegan": 4,
+      "prompt": "Close up of a person looking thoughtful, intense expression, soft natural lighting, 9:16 aspect ratio."
+    },
+    {
+      "adegan": 5,
+      "prompt": "Person talking to camera, friendly and explaining gesture, indoor background, 9:16 aspect ratio."
+    },
+    {
+      "adegan": 6,
+      "prompt": "Person laughing and shrugging at the camera, lighthearted atmosphere, 9:16 aspect ratio."
+    }
+  ],
+  "editing_notes": {
+    "format": "9:16",
+    "subtitle": "Bold, clean font (Montserrat or similar), white with black shadow, placed in the center-bottom.",
+    "musik": "Lo-fi beat yang santai dan ceria.",
+    "tempo": "Cepat dan dinamis.",
+    "transisi": "Minimalist cuts dan sedikit dissolve.",
+    "sound_effect": "Pop sound saat teks muncul, woosh sound saat transisi pintu."
+  },
+  "quality_check": {
+    "original": true,
+    "tidak_misleading": true,
+    "tidak_spam": true,
+    "tidak_berisiko": true,
+    "perlu_review_manusia": true
+  }
+}
