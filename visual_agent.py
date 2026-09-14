@@ -5,13 +5,35 @@ import re
 import urllib.parse
 import urllib.request
 import subprocess
+import shutil
+import textwrap
 from datetime import datetime
 
 
 # ============================================================
 # FBPRO VISUAL AGENT
-# V6 - STABLE VERSION
+# V7 - PEXELS VIDEO VERSION
+#
+# Fungsi:
+# Production JSON
+#      ↓
+# Gemini analisis storyboard
+#      ↓
+# keyword visual konkret
+#      ↓
+# Pexels Video
+#      ↓
+# beberapa klip per scene
+#      ↓
+# crop 9:16
+#      ↓
+# teks layar
+#      ↓
+# credit Pexels
+#      ↓
+# video final
 # ============================================================
+
 
 WIDTH = 1080
 HEIGHT = 1920
@@ -22,14 +44,19 @@ GEMINI_API_KEY = os.environ.get(
     ""
 )
 
+PEXELS_API_KEY = os.environ.get(
+    "PEXELS_API_KEY",
+    ""
+)
+
 GEMINI_MODEL = "gemini-3.1-flash-lite"
 
-WIKIMEDIA_API = (
-    "https://commons.wikimedia.org/w/api.php"
+PEXELS_API = (
+    "https://api.pexels.com/v1/videos/search"
 )
 
 USER_AGENT = (
-    "FBProVisualAgent/6.0 "
+    "FBProVisualAgent/7.0 "
     "(GitHub Actions)"
 )
 
@@ -48,10 +75,38 @@ os.makedirs(
     exist_ok=True
 )
 
+# Bersihkan file sementara lama
+if os.path.exists("visual_tmp"):
+    shutil.rmtree("visual_tmp")
+
 os.makedirs(
     "visual_tmp",
     exist_ok=True
 )
+
+
+# ============================================================
+# VALIDASI API
+# ============================================================
+
+if not GEMINI_API_KEY:
+
+    print(
+        "WARNING: GEMINI_API_KEY tidak ditemukan."
+    )
+
+    print(
+        "Agent akan menggunakan fallback keyword."
+    )
+
+
+if not PEXELS_API_KEY:
+
+    raise SystemExit(
+        "ERROR: PEXELS_API_KEY tidak ditemukan. "
+        "Pastikan GitHub Secret bernama "
+        "PEXELS_API_KEY sudah dibuat."
+    )
 
 
 # ============================================================
@@ -78,7 +133,7 @@ latest_production = max(
 
 print()
 print("========================================")
-print("FBPRO VISUAL AGENT V6")
+print("FBPRO VISUAL AGENT V7")
 print("========================================")
 print()
 
@@ -169,24 +224,80 @@ def clean_text(text):
 
 
 # ============================================================
+# WRAP TEXT
+# ============================================================
+
+def wrap_screen_text(text):
+
+    text = clean_text(
+        text
+    )
+
+    if not text:
+
+        text = title
+
+
+    # Batasi agar tidak memenuhi layar
+    if len(text) > 130:
+
+        text = (
+            text[:127]
+            + "..."
+        )
+
+
+    lines = textwrap.wrap(
+        text,
+        width=34,
+        break_long_words=False,
+        break_on_hyphens=False
+    )
+
+
+    # Maksimal 4 baris
+    lines = lines[:4]
+
+
+    return "\n".join(
+        lines
+    )
+
+
+# ============================================================
 # HTTP JSON
 # ============================================================
 
-def get_json(url):
+def get_json(
+    url,
+    headers=None
+):
+
+    request_headers = {
+        "User-Agent": USER_AGENT
+    }
+
+
+    if headers:
+
+        request_headers.update(
+            headers
+        )
+
 
     request = urllib.request.Request(
         url,
-        headers={
-            "User-Agent": USER_AGENT
-        }
+        headers=request_headers
     )
+
 
     with urllib.request.urlopen(
         request,
-        timeout=60
+        timeout=90
     ) as response:
 
         content = response.read()
+
 
     return json.loads(
         content.decode("utf-8")
@@ -204,46 +315,60 @@ def download_file(
 
     try:
 
+        print()
         print(
-            "Download:",
+            "Download video:"
+        )
+
+        print(
             url
         )
+
 
         request = urllib.request.Request(
             url,
             headers={
-                "User-Agent": USER_AGENT
+                "User-Agent":
+                    USER_AGENT
             }
         )
 
+
         with urllib.request.urlopen(
             request,
-            timeout=90
+            timeout=120
         ) as response:
 
             content = response.read()
 
-        if len(content) < 5000:
+
+        if len(content) < 10000:
 
             print(
-                "File terlalu kecil."
+                "File video terlalu kecil."
             )
 
             return False
+
 
         with open(
             destination,
             "wb"
         ) as file:
 
-            file.write(content)
+            file.write(
+                content
+            )
+
 
         print(
             "Download berhasil:",
             destination
         )
 
+
         return True
+
 
     except Exception as error:
 
@@ -282,35 +407,61 @@ def create_keywords(scene):
         )
     )
 
-    prompt = f"""
-Create five short English search queries for
-real photographs on Wikimedia Commons.
 
-Scene visual:
+    prompt = f"""
+You are a professional short-form video editor.
+
+Analyze this Indonesian social media video scene.
+
+Visual description:
 {visual}
 
-Voice:
+Narration:
 {voice}
 
-On screen:
+On-screen text:
 {screen}
 
+Create five SHORT English search queries for
+REAL STOCK VIDEO FOOTAGE on Pexels.
+
+The footage must visually represent what the narration
+is actually talking about.
+
 Rules:
+
 - 2 to 5 words per query
-- concrete objects, people or activities
-- suitable for a real photograph
-- no abstract motivational phrases
-- no explanations
-- no image generation prompts
+- concrete people, objects, places or actions
+- describe something that can actually be filmed
+- prioritize movement/action
+- avoid abstract concepts
+- avoid motivational phrases
+- avoid words like success, inspiration, happiness
+  unless there is a concrete visual action
+- do not create image-generation prompts
+- do not explain anything
 
-Examples:
-small business owner
-person using smartphone
-local food seller
-customer shopping market
-woman working laptop
+Example:
 
-Return ONLY JSON:
+Narration:
+"Pedagang online sekarang bisa menerima pesanan
+langsung dari smartphone."
+
+Good queries:
+
+online seller smartphone
+small business owner phone
+person checking orders phone
+seller packing online order
+woman using smartphone business
+
+Bad queries:
+
+online success
+digital transformation
+business motivation
+
+Return ONLY valid JSON:
 
 {{
   "queries": [
@@ -323,11 +474,8 @@ Return ONLY JSON:
 }}
 """
 
-    if not GEMINI_API_KEY:
 
-        print(
-            "WARNING: GEMINI_API_KEY tidak ditemukan."
-        )
+    if not GEMINI_API_KEY:
 
         return []
 
@@ -348,7 +496,8 @@ Return ONLY JSON:
                 "parts": [
 
                     {
-                        "text": prompt
+                        "text":
+                            prompt
                     }
 
                 ]
@@ -447,11 +596,13 @@ Return ONLY JSON:
                 item
             )
 
+
             query = re.sub(
                 r"[^a-zA-Z0-9\s-]",
                 " ",
                 query
             )
+
 
             query = " ".join(
                 query.split()
@@ -491,83 +642,111 @@ def fallback_keywords(scene):
         )
     )
 
+    voice = clean_text(
+        scene.get(
+            "voice_over",
+            ""
+        )
+    )
+
+
+    combined = (
+        visual
+        + " "
+        + voice
+    )
+
+
     words = re.findall(
         r"[a-zA-Z]{4,}",
-        visual
+        combined
     )
+
+
+    queries = []
 
 
     if words:
 
-        words = words[:3]
-
         first_query = " ".join(
-            words
+            words[:4]
         )
 
-    else:
-
-        first_query = (
-            "person working"
+        queries.append(
+            first_query
         )
 
 
-    return [
+    queries.extend([
 
-        first_query,
+        "person using smartphone",
 
-        "small business",
-
-        "business owner",
+        "small business owner",
 
         "person working",
 
-        "daily activity"
+        "people daily activity",
 
-    ]
+        "business activity"
+
+    ])
+
+
+    return queries
 
 
 # ============================================================
-# WIKIMEDIA SEARCH
+# PEXELS SEARCH CACHE
 # ============================================================
 
-def search_wikimedia(query):
+pexels_cache = {}
+
+
+# ============================================================
+# PEXELS SEARCH
+# ============================================================
+
+def search_pexels(
+    query
+):
+
+    query = clean_text(
+        query
+    )
+
+
+    if not query:
+
+        return []
+
+
+    cache_key = query.lower()
+
+
+    if cache_key in pexels_cache:
+
+        return pexels_cache[
+            cache_key
+        ]
+
 
     params = {
 
-        "action":
-            "query",
-
-        "format":
-            "json",
-
-        "generator":
-            "search",
-
-        "gsrsearch":
+        "query":
             query,
 
-        "gsrnamespace":
-            "6",
+        "per_page":
+            "15",
 
-        "gsrlimit":
-            "10",
-
-        "prop":
-            "imageinfo",
-
-        "iiprop":
-            "url|mime",
-
-        "iiurlwidth":
-            "1400"
+        "orientation":
+            "portrait"
 
     }
 
 
     url = (
 
-        WIKIMEDIA_API
+        PEXELS_API
         + "?"
         + urllib.parse.urlencode(
             params
@@ -576,202 +755,363 @@ def search_wikimedia(query):
     )
 
 
+    print()
+    print(
+        "Pexels search:",
+        query
+    )
+
+
     try:
 
         result = get_json(
-            url
+
+            url,
+
+            headers={
+
+                "Authorization":
+                    PEXELS_API_KEY
+
+            }
+
         )
+
 
     except Exception as error:
 
         print(
-            "Wikimedia error:",
+            "Pexels search error:",
             error
         )
+
+        return []
+
+
+    videos = result.get(
+        "videos",
+        []
+    )
+
+
+    pexels_cache[
+        cache_key
+    ] = videos
+
+
+    print(
+        "Video ditemukan:",
+        len(videos)
+    )
+
+
+    return videos
+
+
+# ============================================================
+# PILIH FILE VIDEO TERBAIK
+# ============================================================
+
+def choose_video_file(
+    video
+):
+
+    files = video.get(
+        "video_files",
+        []
+    )
+
+
+    candidates = []
+
+
+    for item in files:
+
+        link = item.get(
+            "link",
+            ""
+        )
+
+        file_type = item.get(
+            "file_type",
+            ""
+        )
+
+        width = int(
+            item.get(
+                "width",
+                0
+            ) or 0
+        )
+
+        height = int(
+            item.get(
+                "height",
+                0
+            ) or 0
+        )
+
+
+        if not link:
+
+            continue
+
+
+        if file_type != "video/mp4":
+
+            continue
+
+
+        if width <= 0 or height <= 0:
+
+            continue
+
+
+        ratio = (
+            height / width
+        )
+
+
+        portrait_bonus = 0
+
+
+        if ratio >= 1.20:
+
+            portrait_bonus = 100000000
+
+
+        # Hindari file yang terlalu besar
+        if width > 2000:
+
+            size_bonus = -1000000
+
+        else:
+
+            size_bonus = (
+                width * height
+            )
+
+
+        score = (
+            portrait_bonus
+            + size_bonus
+        )
+
+
+        candidates.append(
+            (
+                score,
+                item
+            )
+        )
+
+
+    if not candidates:
 
         return None
 
 
-    pages = (
-
-        result
-        .get(
-            "query",
-            {}
-        )
-        .get(
-            "pages",
-            {}
-        )
-
+    candidates.sort(
+        key=lambda item: item[0],
+        reverse=True
     )
 
 
-    for page in pages.values():
-
-        imageinfo = page.get(
-            "imageinfo",
-            []
-        )
-
-
-        if not imageinfo:
-
-            continue
-
-
-        info = imageinfo[0]
-
-
-        mime = info.get(
-            "mime",
-            ""
-        )
-
-
-        if not mime.startswith(
-            "image/"
-        ):
-
-            continue
-
-
-        image_url = info.get(
-            "thumburl",
-            ""
-        )
-
-
-        if not image_url:
-
-            image_url = info.get(
-                "url",
-                ""
-            )
-
-
-        if not image_url:
-
-            continue
-
-
-        return {
-
-            "title":
-                page.get(
-                    "title",
-                    ""
-                ),
-
-            "url":
-                image_url
-
-        }
-
-
-    return None
+    return candidates[0][1]
 
 
 # ============================================================
-# CARI FOTO
+# VIDEO YANG SUDAH DIGUNAKAN
 # ============================================================
 
-def find_photo(
-    scene,
-    number
+used_video_ids = set()
+
+
+# ============================================================
+# CARI VIDEO TERBAIK
+# ============================================================
+
+def find_video(
+    queries,
+    scene_number,
+    part_number
 ):
 
     print()
     print("----------------------------------------")
     print(
-        "MENCARI FOTO SCENE",
-        number
+        "MENCARI VIDEO SCENE",
+        scene_number,
+        "PART",
+        part_number
     )
     print("----------------------------------------")
 
 
-    queries = create_keywords(
-        scene
-    )
-
-
     if not queries:
 
-        queries = fallback_keywords(
-            scene
-        )
+        queries = [
 
+            "person using smartphone",
 
-    print(
-        "Search keywords:"
-    )
+            "small business owner",
 
+            "person working"
 
-    for query in queries:
-
-        print(
-            " -",
-            query
-        )
+        ]
 
 
     for query in queries:
 
-        result = search_wikimedia(
+        videos = search_pexels(
             query
         )
 
 
-        if result:
+        for video in videos:
+
+            video_id = video.get(
+                "id"
+            )
+
+
+            if video_id in used_video_ids:
+
+                continue
+
+
+            video_file = choose_video_file(
+                video
+            )
+
+
+            if not video_file:
+
+                continue
+
+
+            duration = float(
+                video.get(
+                    "duration",
+                    0
+                ) or 0
+            )
+
+
+            if duration < 2:
+
+                continue
+
+
+            used_video_ids.add(
+                video_id
+            )
+
+
+            user_info = video.get(
+                "user",
+                {}
+            )
+
+
+            photographer = clean_text(
+                user_info.get(
+                    "name",
+                    ""
+                )
+            )
+
 
             print()
             print(
-                "FOTO DITEMUKAN:"
+                "VIDEO DITEMUKAN"
             )
 
             print(
-                result["title"]
+                "ID:",
+                video_id
             )
 
-            return result
+            print(
+                "Query:",
+                query
+            )
+
+            print(
+                "Durasi:",
+                duration,
+                "detik"
+            )
+
+            print(
+                "Ukuran:",
+                video_file.get(
+                    "width"
+                ),
+                "x",
+                video_file.get(
+                    "height"
+                )
+            )
+
+
+            return {
+
+                "id":
+                    video_id,
+
+                "url":
+                    video_file.get(
+                        "link"
+                    ),
+
+                "duration":
+                    duration,
+
+                "photographer":
+                    photographer,
+
+                "photographer_url":
+                    user_info.get(
+                        "url",
+                        ""
+                    ),
+
+                "pexels_url":
+                    video.get(
+                        "url",
+                        ""
+                    )
+
+            }
 
 
     return None
 
 
 # ============================================================
-# BUAT TEXT FILE
+# TEXT FILE
 # ============================================================
 
 def create_text_file(
     text,
-    number
+    number,
+    part
 ):
 
     filename = (
         "visual_tmp/"
         "text_"
         + str(number)
+        + "_"
+        + str(part)
         + ".txt"
     )
 
 
-    text = clean_text(
+    text = wrap_screen_text(
         text
     )
-
-
-    if not text:
-
-        text = title
-
-
-    if len(text) > 180:
-
-        text = (
-            text[:177]
-            + "..."
-        )
 
 
     with open(
@@ -789,20 +1129,73 @@ def create_text_file(
 
 
 # ============================================================
-# BUAT SCENE VIDEO
+# CREDIT FILE
 # ============================================================
 
-def create_scene(
-    image_file,
+def create_credit_file(
+    photographer,
+    number,
+    part
+):
+
+    filename = (
+        "visual_tmp/"
+        "credit_"
+        + str(number)
+        + "_"
+        + str(part)
+        + ".txt"
+    )
+
+
+    if photographer:
+
+        credit = (
+            "Footage: Pexels • "
+            + photographer
+            + " • pexels.com"
+        )
+
+    else:
+
+        credit = (
+            "Footage: Pexels • pexels.com"
+        )
+
+
+    with open(
+        filename,
+        "w",
+        encoding="utf-8"
+    ) as file:
+
+        file.write(
+            credit
+        )
+
+
+    return filename
+
+
+# ============================================================
+# BUAT VIDEO KLIP
+# ============================================================
+
+def create_clip(
+    source_file,
     text_file,
+    credit_file,
     duration,
-    number
+    number,
+    part
 ):
 
     output = (
         "visual_tmp/"
-        "scene_"
+        "clip_"
         + str(number)
+        + "_"
+        + str(part)
         + ".mp4"
     )
 
@@ -815,7 +1208,7 @@ def create_scene(
 
     except Exception:
 
-        duration = 5
+        duration = 3
 
 
     if duration < 2:
@@ -830,21 +1223,26 @@ def create_scene(
 
     print()
     print(
-        "Render scene",
-        number
+        "Render clip",
+        number,
+        "-",
+        part
     )
 
     print(
         "Durasi:",
-        duration,
-        "detik"
+        duration
     )
 
 
     # --------------------------------------------------------
-    # FILTER STABIL
+    # VIDEO AKTUAL
+    # --------------------------------------------------------
     #
-    # TIDAK MENGGUNAKAN ZOOMPAN
+    # Tidak menggunakan foto.
+    # Tidak menggunakan zoompan.
+    # Klip video Pexels langsung digunakan.
+    #
     # --------------------------------------------------------
 
     video_filter = (
@@ -862,20 +1260,20 @@ def create_scene(
         + ","
         "eq="
         "contrast=1.04:"
-        "brightness=-0.02:"
-        "saturation=1.05,"
+        "brightness=-0.015:"
+        "saturation=1.04,"
         "drawbox="
         "x=0:"
         "y=0:"
         "w=iw:"
         "h=ih:"
-        "color=black@0.10:"
+        "color=black@0.08:"
         "t=fill,"
         "drawbox="
         "x=0:"
-        "y=ih-560:"
+        "y=1360:"
         "w=iw:"
-        "h=560:"
+        "h=520:"
         "color=black@0.55:"
         "t=fill,"
         "drawtext="
@@ -886,13 +1284,27 @@ def create_scene(
         + text_file
         + ":"
         "fontcolor=white:"
-        "fontsize=58:"
-        "line_spacing=18:"
+        "fontsize=54:"
+        "line_spacing=12:"
         "x=65:"
-        "y=1490:"
+        "y=1410:"
         "shadowcolor=black@0.9:"
         "shadowx=3:"
-        "shadowy=3"
+        "shadowy=3,"
+        "drawtext="
+        "fontfile="
+        + FONT_BOLD
+        + ":"
+        "textfile="
+        + credit_file
+        + ":"
+        "fontcolor=white@0.70:"
+        "fontsize=22:"
+        "x=65:"
+        "y=1850:"
+        "shadowcolor=black@0.7:"
+        "shadowx=1:"
+        "shadowy=1"
     )
 
 
@@ -902,11 +1314,11 @@ def create_scene(
 
         "-y",
 
-        "-loop",
-        "1",
+        "-stream_loop",
+        "-1",
 
         "-i",
-        image_file,
+        source_file,
 
         "-vf",
         video_filter,
@@ -917,11 +1329,16 @@ def create_scene(
         "-r",
         str(FPS),
 
+        "-an",
+
         "-c:v",
         "libx264",
 
         "-preset",
         "veryfast",
+
+        "-crf",
+        "23",
 
         "-pix_fmt",
         "yuv420p",
@@ -934,10 +1351,21 @@ def create_scene(
     ]
 
 
-    subprocess.run(
+    result = subprocess.run(
         command,
-        check=True
+        check=False
     )
+
+
+    if result.returncode != 0:
+
+        raise SystemExit(
+            "ERROR: FFmpeg gagal membuat "
+            "clip "
+            + str(number)
+            + "-"
+            + str(part)
+        )
 
 
     if not os.path.exists(
@@ -945,13 +1373,24 @@ def create_scene(
     ):
 
         raise SystemExit(
-            "ERROR: Scene video tidak "
-            "berhasil dibuat."
+            "ERROR: Clip tidak ditemukan."
+        )
+
+
+    file_size = os.path.getsize(
+        output
+    )
+
+
+    if file_size < 20000:
+
+        raise SystemExit(
+            "ERROR: Clip terlalu kecil."
         )
 
 
     print(
-        "Scene berhasil:",
+        "Clip berhasil:",
         output
     )
 
@@ -960,15 +1399,45 @@ def create_scene(
 
 
 # ============================================================
+# HITUNG JUMLAH KLIP
+# ============================================================
+
+def calculate_parts(
+    duration
+):
+
+    try:
+
+        duration = float(
+            duration
+        )
+
+    except Exception:
+
+        duration = 5
+
+
+    if duration >= 12:
+
+        return 3
+
+    if duration >= 7:
+
+        return 2
+
+    return 1
+
+
+# ============================================================
 # PROSES SEMUA SCENE
 # ============================================================
 
-scene_files = []
+clip_files = []
 
 
 print()
 print("========================================")
-print("MEMBUAT VIDEO SCENE")
+print("MEMBUAT VIDEO DARI STOCK FOOTAGE")
 print("========================================")
 
 
@@ -989,17 +1458,35 @@ for index, scene in enumerate(
 
 
     # --------------------------------------------------------
-    # DURASI
+    # DURASI SCENE
     # --------------------------------------------------------
 
-    duration = scene.get(
-        "durasi_detik",
-        5
-    )
+    try:
+
+        scene_duration = float(
+            scene.get(
+                "durasi_detik",
+                5
+            )
+        )
+
+    except Exception:
+
+        scene_duration = 5
+
+
+    if scene_duration < 2:
+
+        scene_duration = 2
+
+
+    if scene_duration > 15:
+
+        scene_duration = 15
 
 
     # --------------------------------------------------------
-    # TEXT LAYAR
+    # TEXT
     # --------------------------------------------------------
 
     screen_text = clean_text(
@@ -1025,144 +1512,275 @@ for index, scene in enumerate(
         screen_text = title
 
 
-    text_file = create_text_file(
-        screen_text,
-        number
+    # --------------------------------------------------------
+    # GEMINI
+    # --------------------------------------------------------
+
+    queries = create_keywords(
+        scene
+    )
+
+
+    if not queries:
+
+        print(
+            "Gemini tidak menghasilkan keyword."
+        )
+
+        queries = fallback_keywords(
+            scene
+        )
+
+
+    print()
+    print(
+        "KEYWORD VISUAL:"
+    )
+
+
+    for query in queries:
+
+        print(
+            " -",
+            query
+        )
+
+
+    # --------------------------------------------------------
+    # JUMLAH KLIP
+    # --------------------------------------------------------
+
+    parts = calculate_parts(
+        scene_duration
+    )
+
+
+    part_duration = (
+        scene_duration
+        / parts
+    )
+
+
+    print()
+    print(
+        "Scene duration:",
+        scene_duration
+    )
+
+    print(
+        "Jumlah klip:",
+        parts
+    )
+
+    print(
+        "Durasi tiap klip:",
+        round(
+            part_duration,
+            2
+        )
     )
 
 
     # --------------------------------------------------------
-    # CARI FOTO
+    # BUAT KLIP
     # --------------------------------------------------------
 
-    photo = find_photo(
-        scene,
-        number
-    )
+    for part in range(
+        1,
+        parts + 1
+    ):
 
+        # Rotasi keyword agar visual antar part
+        # tidak selalu menggunakan pencarian yang sama
 
-    # --------------------------------------------------------
-    # FALLBACK
-    # --------------------------------------------------------
-
-    if not photo:
-
-        print(
-            "Foto khusus tidak ditemukan."
+        rotated_queries = (
+            queries[
+                part - 1:
+            ]
+            + queries[
+                :
+                part - 1
+            ]
         )
 
-        print(
-            "Mencoba foto fallback..."
+
+        video = find_video(
+
+            rotated_queries,
+
+            number,
+
+            part
+
         )
 
 
-        fallback_queries = [
+        # ----------------------------------------------------
+        # FALLBACK PEXELS
+        # ----------------------------------------------------
 
-            "small business",
+        if not video:
 
-            "person working",
+            print(
+                "Video spesifik tidak ditemukan."
+            )
 
-            "business owner",
-
-            "people working"
-
-        ]
-
-
-        for query in fallback_queries:
-
-            photo = search_wikimedia(
-                query
+            print(
+                "Mencoba fallback Pexels..."
             )
 
 
-            if photo:
+            fallback_queries = [
 
-                break
+                "person working",
+
+                "small business",
+
+                "business owner",
+
+                "person using phone",
+
+                "daily life"
+
+            ]
 
 
-    if not photo:
+            video = find_video(
 
-        raise SystemExit(
+                fallback_queries,
 
-            "ERROR: Tidak ada foto "
-            "untuk scene "
+                number,
+
+                part
+
+            )
+
+
+        if not video:
+
+            raise SystemExit(
+
+                "ERROR: Tidak menemukan "
+                "video Pexels untuk scene "
+                + str(number)
+                + " part "
+                + str(part)
+
+            )
+
+
+        # ----------------------------------------------------
+        # DOWNLOAD
+        # ----------------------------------------------------
+
+        source_file = (
+
+            "visual_tmp/"
+            "source_"
             + str(number)
+            + "_"
+            + str(part)
+            + ".mp4"
 
         )
 
 
-    # --------------------------------------------------------
-    # DOWNLOAD
-    # --------------------------------------------------------
+        success = download_file(
 
-    image_file = (
+            video["url"],
 
-        "visual_tmp/"
-        "image_"
-        + str(number)
-        + ".jpg"
-
-    )
-
-
-    success = download_file(
-
-        photo["url"],
-
-        image_file
-
-    )
-
-
-    if not success:
-
-        raise SystemExit(
-
-            "ERROR: Gagal download "
-            "foto scene "
-            + str(number)
+            source_file
 
         )
 
 
-    # --------------------------------------------------------
-    # BUAT VIDEO SCENE
-    # --------------------------------------------------------
+        if not success:
 
-    scene_video = create_scene(
+            raise SystemExit(
 
-        image_file,
+                "ERROR: Gagal download "
+                "video scene "
+                + str(number)
+                + " part "
+                + str(part)
 
-        text_file,
-
-        duration,
-
-        number
-
-    )
+            )
 
 
-    scene_files.append(
-        scene_video
-    )
+        # ----------------------------------------------------
+        # TEXT
+        # ----------------------------------------------------
+
+        text_file = create_text_file(
+
+            screen_text,
+
+            number,
+
+            part
+
+        )
+
+
+        # ----------------------------------------------------
+        # CREDIT
+        # ----------------------------------------------------
+
+        credit_file = create_credit_file(
+
+            video.get(
+                "photographer",
+                ""
+            ),
+
+            number,
+
+            part
+
+        )
+
+
+        # ----------------------------------------------------
+        # RENDER
+        # ----------------------------------------------------
+
+        clip = create_clip(
+
+            source_file,
+
+            text_file,
+
+            credit_file,
+
+            part_duration,
+
+            number,
+
+            part
+
+        )
+
+
+        clip_files.append(
+            clip
+        )
 
 
 # ============================================================
-# CEK HASIL SCENE
+# VALIDASI CLIP
 # ============================================================
 
-if not scene_files:
+if not clip_files:
 
     raise SystemExit(
-        "ERROR: Tidak ada scene."
+        "ERROR: Tidak ada clip."
     )
 
 
 print()
 print(
-    "Scene berhasil dibuat:",
-    len(scene_files)
+    "Total clip berhasil:",
+    len(clip_files)
 )
 
 
@@ -1182,10 +1800,17 @@ with open(
     encoding="utf-8"
 ) as file:
 
-    for scene_file in scene_files:
+    for clip_file in clip_files:
 
         absolute_path = os.path.abspath(
-            scene_file
+            clip_file
+        )
+
+
+        # Escape apostrophe
+        absolute_path = absolute_path.replace(
+            "'",
+            "'\\''"
         )
 
 
@@ -1216,12 +1841,12 @@ output_video = (
 
 
 # ============================================================
-# GABUNG SCENE
+# GABUNG VIDEO
 # ============================================================
 
 print()
 print("========================================")
-print("MENGGABUNGKAN VIDEO")
+print("MENGGABUNGKAN SEMUA KLIP")
 print("========================================")
 print()
 
@@ -1241,11 +1866,16 @@ command = [
     "-i",
     concat_file,
 
+    "-an",
+
     "-c:v",
     "libx264",
 
     "-preset",
     "veryfast",
+
+    "-crf",
+    "23",
 
     "-pix_fmt",
     "yuv420p",
@@ -1258,14 +1888,22 @@ command = [
 ]
 
 
-subprocess.run(
+result = subprocess.run(
     command,
-    check=True
+    check=False
 )
 
 
+if result.returncode != 0:
+
+    raise SystemExit(
+        "ERROR: FFmpeg gagal "
+        "menggabungkan video."
+    )
+
+
 # ============================================================
-# VALIDASI
+# VALIDASI FINAL
 # ============================================================
 
 if not os.path.exists(
@@ -1285,7 +1923,59 @@ file_size = os.path.getsize(
 if file_size < 100000:
 
     raise SystemExit(
-        "ERROR: Ukuran video terlalu kecil."
+        "ERROR: Ukuran video final "
+        "terlalu kecil."
+    )
+
+
+# ============================================================
+# BUAT INFORMASI CREDIT
+# ============================================================
+
+credits_file = (
+    "visual_tmp/"
+    "credits_used.json"
+)
+
+
+credits = {
+
+    "source":
+        "Pexels",
+
+    "website":
+        "pexels.com",
+
+    "production":
+        latest_production,
+
+    "video":
+        output_video,
+
+    "clips":
+        []
+
+}
+
+
+for clip_file in clip_files:
+
+    credits["clips"].append(
+        clip_file
+    )
+
+
+with open(
+    credits_file,
+    "w",
+    encoding="utf-8"
+) as file:
+
+    json.dump(
+        credits,
+        file,
+        indent=2,
+        ensure_ascii=False
     )
 
 
@@ -1295,7 +1985,7 @@ if file_size < 100000:
 
 print()
 print("========================================")
-print("FBPRO VISUAL AGENT V6 BERHASIL")
+print("FBPRO VISUAL AGENT V7 BERHASIL")
 print("========================================")
 print()
 
@@ -1333,14 +2023,32 @@ print(
 
 print()
 print(
-    "Setiap scene menggunakan foto nyata."
+    "Sumber visual: Pexels Video"
+)
+
+print(
+    "Setiap scene dapat menggunakan "
+    "beberapa klip video."
+)
+
+print(
+    "Visual dianalisis berdasarkan "
+    "narasi menggunakan Gemini."
+)
+
+print(
+    "Tidak menggunakan foto statis."
 )
 
 print(
     "Tidak menggunakan zoompan."
 )
 
+print(
+    "Video dibuat tanpa audio."
+)
+
 print()
 print(
-    "FBPro Visual Agent selesai."
+    "FBPro Visual Agent V7 selesai."
 )
