@@ -1,0 +1,70 @@
+{
+  "job_id": "job_20260914_162531",
+  "status": "pending",
+  "created_at": "2026-09-14T16:26:05Z",
+  "source_file": "production/2026-09-14_09-15-59.json",
+  "title": "Kenapa Kita Sering Lupa Saat Masuk Pintu?",
+  "target": {
+    "platform": "Facebook Professional Mode",
+    "format": "MP4",
+    "aspect_ratio": "9:16",
+    "final_resolution": "1080x1920",
+    "scene_resolution": "480x832",
+    "fps": 16
+  },
+  "model": {
+    "name": "Wan2.1-T2V-1.3B",
+    "mode": "text-to-video",
+    "renderer": "Google Colab GPU"
+  },
+  "scenes": [
+    {
+      "scene": 1,
+      "duration": 5,
+      "narration": "Pernah nggak sih, niatnya mau ambil sesuatu, tapi pas sampai depan pintu kamu malah bengong lupa mau ngapain?",
+      "visual": "Kreator berdiri di depan pintu kamar dengan ekspresi bingung dan menggaruk kepala.",
+      "prompt": "A polished stylized 3D animated film style, vertical 9:16 aspect ratio. A young Indonesian man stands frozen in the doorway of a cozy, sunlit bedroom with warm wood interiors. He has a confused, blank expression, slowly scratching the back of his head, eyes darting around as if searching for a forgotten memory. Cinematic lighting with soft shadows, high-detail textures, expressive character animation, and a gentle handheld camera movement that slowly zooms in on his puzzled face. No text, no UI.",
+      "negative_prompt": "text, subtitles, captions, watermark, logo, UI, static image, blurry, low quality, flicker, jitter, deformed hands, extra fingers, extra limbs, distorted face"
+    },
+    {
+      "scene": 2,
+      "duration": 5,
+      "narration": "Tenang, kamu nggak sendirian. Fenomena ini namanya 'Doorway Effect'.",
+      "visual": "Kreator berjalan melewati pintu dengan gerakan sedikit dipercepat.",
+      "prompt": "Cinematic 3D animation, vertical aspect ratio. A young Indonesian man with a confused expression walks briskly through a sunlit wooden doorway of a traditional Javanese house, his gait slightly sped up. As he crosses the threshold, he pauses abruptly, eyes widening in a \"blank\" moment of forgetfulness. The camera follows him with a smooth, dynamic tracking shot that transitions from the bright living area into a cozy, detailed bedroom. Polished stylized film aesthetic, soft volumetric lighting, rich textures, vibrant Southeast Asian interior design, high-quality character animation, no text or overlays.",
+      "negative_prompt": "text, subtitles, captions, watermark, logo, UI, static image, blurry, low quality, flicker, jitter, deformed hands, extra fingers, extra limbs, distorted face"
+    },
+    {
+      "scene": 3,
+      "duration": 5,
+      "narration": "Otak kita menganggap pintu sebagai batas antar ruang. Saat melewati pintu, otak melakukan 'reset' memori jangka pendek.",
+      "visual": "Kreator duduk santai, menunjuk ke arah pelipis/otak sambil tersenyum.",
+      "prompt": "Create a cinematic AI-generated animated video scene for a vertical social-media reel. The scene must visibly communicate the narration through actions, characters and objects. Polished stylized 3D animated film look, expressive natural movement, cinematic lighting, believable Indonesian or Southeast Asian setting when relevant, detailed materials, dynamic camera. No text, subtitles, logos, watermarks or UI. Topic: Kenapa Kita Sering Lupa Saat Masuk Pintu?. Narration: Otak kita menganggap pintu sebagai batas antar ruang. Saat melewati pintu, otak melakukan 'reset' memori jangka pendek.. Visual direction: Kreator duduk santai, menunjuk ke arah pelipis/otak sambil tersenyum.",
+      "negative_prompt": "text, subtitles, captions, watermark, logo, UI, static image, blurry, low quality, flicker, jitter, deformed hands, extra fingers, extra limbs, distorted face"
+    },
+    {
+      "scene": 4,
+      "duration": 5,
+      "narration": "Sayangnya, memori tentang apa yang mau kita ambil jadi ikut terhapus karena fokus berpindah ke ruangan baru.",
+      "visual": "Kreator terlihat berpikir keras sambil memegang dagu.",
+      "prompt": "Create a cinematic AI-generated animated video scene for a vertical social-media reel. The scene must visibly communicate the narration through actions, characters and objects. Polished stylized 3D animated film look, expressive natural movement, cinematic lighting, believable Indonesian or Southeast Asian setting when relevant, detailed materials, dynamic camera. No text, subtitles, logos, watermarks or UI. Topic: Kenapa Kita Sering Lupa Saat Masuk Pintu?. Narration: Sayangnya, memori tentang apa yang mau kita ambil jadi ikut terhapus karena fokus berpindah ke ruangan baru.. Visual direction: Kreator terlihat berpikir keras sambil memegang dagu.",
+      "negative_prompt": "text, subtitles, captions, watermark, logo, UI, static image, blurry, low quality, flicker, jitter, deformed hands, extra fingers, extra limbs, distorted face"
+    },
+    {
+      "scene": 5,
+      "duration": 5,
+      "narration": "Jadi, ini bukan karena kita pelupa, tapi cara otak beradaptasi dengan lingkungan baru.",
+      "visual": "Kreator menjelaskan ke arah kamera dengan gestur meyakinkan.",
+      "prompt": "Cinematic stylized 3D animation, vertical aspect ratio. A charismatic young Indonesian creator stands in a sunlit, modern minimalist living room with tropical plants, gesturing expressively toward the camera as they explain a concept. The camera performs a smooth, slight push-in to focus on the character’s engaging facial expressions and natural hand movements. The background features warm, soft-focus interior lighting and subtle Southeast Asian decor elements. High-quality render, vibrant colors, expressive character design, fluid animation, clean composition, no text.",
+      "negative_prompt": "text, subtitles, captions, watermark, logo, UI, static image, blurry, low quality, flicker, jitter, deformed hands, extra fingers, extra limbs, distorted face"
+    },
+    {
+      "scene": 6,
+      "duration": 5,
+      "narration": "Ternyata otak kita canggih, tapi kadang bikin bingung sendiri, ya?",
+      "visual": "Kreator tertawa kecil ke arah kamera.",
+      "prompt": "Cinematic 3D animation, close-up shot of a friendly young Indonesian man standing in a sunlit, modern minimalist living room with tropical plants, he looks directly into the camera with a charming, lighthearted chuckle, expressive facial animation, soft natural lighting, high-end stylized Pixar-esque aesthetic, vibrant colors, shallow depth of field, smooth camera movement, clean background, no text.",
+      "negative_prompt": "text, subtitles, captions, watermark, logo, UI, static image, blurry, low quality, flicker, jitter, deformed hands, extra fingers, extra limbs, distorted face"
+    }
+  ]
+}
