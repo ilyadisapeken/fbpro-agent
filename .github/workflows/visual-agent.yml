@@ -1,0 +1,45 @@
+name: FBPro Visual Agent
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  create-visual:
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install video tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
+      - name: Run Visual Agent
+        run: |
+          python visual_agent.py
+
+      - name: Save visual video
+        run: |
+          git config user.name "FBPro Visual Agent"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add visuals/
+
+          if git diff --cached --quiet; then
+            echo "Tidak ada visual baru."
+          else
+            git commit -m "FBPro Visual Agent: generate visual"
+            git push
+          fi
