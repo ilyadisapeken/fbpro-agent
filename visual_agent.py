@@ -889,7 +889,7 @@ def create_scene(
         "fontsize=58:"
         "line_spacing=18:"
         "x=65:"
-        "y=ih-430:"
+        "y=1490:"
         "shadowcolor=black@0.9:"
         "shadowx=3:"
         "shadowy=3"
