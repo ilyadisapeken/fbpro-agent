@@ -549,3 +549,326 @@ for index, scene in enumerate(
     screen_text = " ".join(
         screen_text.split()
     )
+
+    if len(screen_text) > 180:
+        screen_text = (
+            screen_text[:180]
+            + "..."
+        )
+
+    # --------------------------------------
+    # FILE TEKS
+    # --------------------------------------
+
+    text_file = (
+        f"visual_tmp/"
+        f"screen_{number}.txt"
+    )
+
+    with open(
+        text_file,
+        "w",
+        encoding="utf-8"
+    ) as f:
+
+        f.write(
+            screen_text
+        )
+
+    # --------------------------------------
+    # SCENE OUTPUT
+    # --------------------------------------
+
+    scene_file = (
+        f"visual_tmp/"
+        f"scene_{number}.mp4"
+    )
+
+    image_file = image_files[
+        index
+    ]
+
+    print(
+        f"Scene {number}/{total_scenes}"
+    )
+
+    # ======================================
+    # JIKA ADA GAMBAR
+    # ======================================
+
+    if image_file:
+
+        # ----------------------------------
+        # Gerakan kamera
+        # ----------------------------------
+
+        # zoom perlahan + sedikit pan
+        zoom_filter = (
+            "scale="
+            f"{WIDTH*2}:"
+            f"{HEIGHT*2}:"
+            "force_original_aspect_ratio=increase,"
+            f"crop={WIDTH*2}:{HEIGHT*2},"
+            "zoompan="
+            "z='min(zoom+0.0015,1.12)':"
+            "x='iw/2-(iw/zoom/2)':"
+            "y='ih/2-(ih/zoom/2)':"
+            f"d={int(duration * FPS)}:"
+            f"s={WIDTH}x{HEIGHT}:"
+            f"fps={FPS}"
+        )
+
+        # ----------------------------------
+        # Overlay gelap
+        # ----------------------------------
+
+        filter_complex = (
+
+            f"[0:v]"
+            f"{zoom_filter},"
+            "eq="
+            "contrast=1.04:"
+            "brightness=-0.03:"
+            "saturation=1.08,"
+            "drawbox="
+            "x=0:"
+            "y=0:"
+            "w=iw:"
+            "h=ih:"
+            "color=black@0.18:"
+            "t=fill,"
+            
+            # top gradient-like panel
+            "drawbox="
+            "x=0:"
+            "y=0:"
+            "w=iw:"
+            "h=250:"
+            "color=black@0.42:"
+            "t=fill,"
+            
+            # bottom panel
+            "drawbox="
+            "x=0:"
+            "y=ih-520:"
+            "w=iw:"
+            "h=520:"
+            "color=black@0.55:"
+            "t=fill,"
+            
+            # teks
+            f"drawtext="
+            f"fontfile={FONT_BOLD}:"
+            f"textfile={text_file}:"
+            "fontcolor=white:"
+            "fontsize=58:"
+            "line_spacing=18:"
+            "x=70:"
+            "y=h-440:"
+            "box=0:"
+            "shadowcolor=black@0.9:"
+            "shadowx=3:"
+            "shadowy=3,"
+            
+            # nomor scene
+            f"drawtext="
+            f"fontfile={FONT_BOLD}:"
+            f"text='0{number}':"
+            "fontcolor=white@0.85:"
+            "fontsize=34:"
+            "x=70:"
+            "y=75:"
+            "shadowcolor=black@0.8:"
+            "shadowx=2:"
+            "shadowy=2,"
+            
+            # branding kecil
+            f"drawtext="
+            f"fontfile={FONT_REGULAR}:"
+            "text='FBPRO ORIGINAL':"
+            "fontcolor=white@0.75:"
+            "fontsize=28:"
+            "x=70:"
+            "y=125:"
+            "shadowcolor=black@0.7:"
+            "shadowx=2:"
+            "shadowy=2"
+        )
+
+        subprocess.run(
+            [
+                "ffmpeg",
+                "-y",
+                "-loop",
+                "1",
+                "-i",
+                image_file,
+                "-vf",
+                filter_complex,
+                "-t",
+                str(duration),
+                "-r",
+                str(FPS),
+                "-c:v",
+                "libx264",
+                "-preset",
+                "veryfast",
+                "-pix_fmt",
+                "yuv420p",
+                scene_file
+            ],
+            check=True
+        )
+
+    # ======================================
+    # FALLBACK JIKA GAMBAR TIDAK ADA
+    # ======================================
+
+    else:
+
+        filter_complex = (
+
+            "drawbox="
+            "x=0:"
+            "y=0:"
+            "w=iw:"
+            "h=ih:"
+            "color=#111827:"
+            "t=fill,"
+
+            f"drawtext="
+            f"fontfile={FONT_BOLD}:"
+            f"textfile={text_file}:"
+            "fontcolor=white:"
+            "fontsize=58:"
+            "line_spacing=18:"
+            "x=70:"
+            "y=(h-text_h)/2:"
+            "box=1:"
+            "boxcolor=black@0.5:"
+            "boxborderw=35:"
+            "shadowcolor=black@0.8:"
+            "shadowx=3:"
+            "shadowy=3"
+        )
+
+        subprocess.run(
+            [
+                "ffmpeg",
+                "-y",
+                "-f",
+                "lavfi",
+                "-i",
+                (
+                    f"color=c=#111827:"
+                    f"s={WIDTH}x{HEIGHT}:"
+                    f"r={FPS}"
+                ),
+                "-vf",
+                filter_complex,
+                "-t",
+                str(duration),
+                "-r",
+                str(FPS),
+                "-c:v",
+                "libx264",
+                "-preset",
+                "veryfast",
+                "-pix_fmt",
+                "yuv420p",
+                scene_file
+            ],
+            check=True
+        )
+
+    scene_files.append(
+        scene_file
+    )
+
+
+# ==========================================
+# CONCAT
+# ==========================================
+
+concat_file = (
+    "visual_tmp/"
+    "concat.txt"
+)
+
+with open(
+    concat_file,
+    "w",
+    encoding="utf-8"
+) as f:
+
+    for scene_file in scene_files:
+
+        absolute_path = os.path.abspath(
+            scene_file
+        )
+
+        f.write(
+            f"file '{absolute_path}'\n"
+        )
+
+
+# ==========================================
+# GABUNG SEMUA SCENE
+# ==========================================
+
+print()
+print("========================================")
+print("MENGGABUNGKAN VIDEO")
+print("========================================")
+
+subprocess.run(
+    [
+        "ffmpeg",
+        "-y",
+        "-f",
+        "concat",
+        "-safe",
+        "0",
+        "-i",
+        concat_file,
+        "-c:v",
+        "libx264",
+        "-preset",
+        "veryfast",
+        "-pix_fmt",
+        "yuv420p",
+        output_video
+    ],
+    check=True
+)
+
+
+# ==========================================
+# INFO
+# ==========================================
+
+print()
+print("========================================")
+print("FBPRO VISUAL AGENT V3 BERHASIL")
+print("========================================")
+print()
+print(
+    f"Sumber : {latest_file}"
+)
+print(
+    f"Video  : {output_video}"
+)
+print()
+print(
+    "Visual : Wikimedia Commons"
+)
+print(
+    "Format : 1080x1920"
+)
+print(
+    "Rasio  : 9:16"
+)
+print(
+    "FPS    : 30"
+)
+print()
