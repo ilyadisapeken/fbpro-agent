@@ -1,4 +1,4 @@
-name: FBPro Visual Agent
+name: FBPro Visual Agent V9
 
 on:
   workflow_dispatch:
@@ -7,7 +7,7 @@ permissions:
   contents: write
 
 jobs:
-  create-visual:
+  create-ai-video-job:
 
     runs-on: ubuntu-latest
 
@@ -21,28 +21,27 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install video tools
+      - name: Install dependency
         run: |
-          sudo apt-get update
-          sudo apt-get install -y ffmpeg
+          python -m pip install --upgrade pip
+          pip install requests
 
-      - name: Run Visual Agent
+      - name: Run FBPro Visual Agent V9
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
         run: |
           python visual_agent.py
 
-      - name: Save visual video
+      - name: Save AI video job
         run: |
           git config user.name "FBPro Visual Agent"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add visuals/
+          git add ai_jobs/
 
           if git diff --cached --quiet; then
-            echo "Tidak ada visual baru."
+            echo "Tidak ada AI video job baru."
           else
-            git commit -m "FBPro Visual Agent: generate video visuals"
+            git commit -m "FBPro V9: create AI video job"
             git push
           fi
